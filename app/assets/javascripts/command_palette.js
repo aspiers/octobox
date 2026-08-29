@@ -36,8 +36,8 @@ var CommandPalette = (function() {
   };
 
   var sidebarCommands = function() {
-    return Array.from(document.querySelectorAll(".flex-sidebar a.nav-link")).map(function(link) {
-      return { label: commandLabel(link), link: link };
+    return Array.from(document.querySelectorAll(".flex-sidebar a.nav-link")).map(function(link, position) {
+      return { label: commandLabel(link), link: link, position: position };
     }).filter(function(command) {
       return command.label.length > 0;
     });
@@ -54,6 +54,11 @@ var CommandPalette = (function() {
     var normalizedQuery = query.trim().toLowerCase();
     visibleCommands = commands.filter(function(command) {
       return command.label.toLowerCase().includes(normalizedQuery);
+    }).sort(function(left, right) {
+      var leftIsPrefix = left.label.toLowerCase().startsWith(normalizedQuery);
+      var rightIsPrefix = right.label.toLowerCase().startsWith(normalizedQuery);
+      if (leftIsPrefix !== rightIsPrefix) return leftIsPrefix ? -1 : 1;
+      return left.position - right.position;
     });
     selectedIndex = 0;
     clearResults(results);

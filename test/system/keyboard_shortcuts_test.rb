@@ -75,12 +75,27 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_current_path(/archive=true/, wait: 2)
   end
 
+  test 'command palette ranks prefix matches before other substring matches' do
+    page.execute_script(<<~JS)
+      var links = document.querySelectorAll('.flex-sidebar a.nav-link');
+      links[0].textContent = 'Contains target';
+      links[1].textContent = 'Target starts here';
+    JS
+
+    send_keys 'g'
+    find('#command-palette-input').fill_in with: 'target'
+
+    matches = all('.command-palette-item').map(&:text)
+    assert_equal ['Target starts here', 'Contains target'], matches
+  end
+
   test 'control-k opens the command palette and arrow keys change selection' do
     send_keys :control, 'k'
     assert_selector '#command-palette.show', wait: 2
 
     input = find('#command-palette-input')
     initial_selection = find('.command-palette-item.active').text
+    assert_equal 'Inbox', initial_selection
     input.send_keys :down
 
     refute_equal initial_selection, find('.command-palette-item.active').text
