@@ -915,7 +915,7 @@ var Octobox = (function() {
   }
 
   var openCurrentLink = function(e) {
-    e.preventDefault(e);
+    e.preventDefault();
     var currentRow = getCurrentRow();
     if (currentRow) {
       var link = currentRow.querySelector("td.notification-subject .link");
@@ -978,6 +978,30 @@ var Octobox = (function() {
   var scrollThreadToBottom = function(e) { scrollThreadTo(e, DOM.thread.scrollHeight); };
   var openPreviousThread = function(e) { openAdjacentThread(e, ".previous"); };
   var openNextThread = function(e) { openAdjacentThread(e, ".next"); };
+
+  var openCurrentGitHubLink = function(e) {
+    e.preventDefault();
+    var currentRow = getCurrentRow();
+    if (!currentRow || !currentRow.dataset.githubUrl) return;
+
+    var githubUrl;
+    try {
+      githubUrl = new URL(currentRow.dataset.githubUrl);
+    } catch {
+      return;
+    }
+    if (!["http:", "https:"].includes(githubUrl.protocol)) return;
+
+    markRead(currentRow.dataset.notificationId);
+    var link = document.createElement("a");
+    link.href = githubUrl.href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.dataset.octoboxGithub = "true";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  };
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
@@ -1085,7 +1109,7 @@ var Octobox = (function() {
     32:  scrollThreadPageDown,   // Space
     35:  scrollThreadToBottom,   // End
     36:  scrollThreadToTop,      // Home
-    79:  openCurrentLink,        // o
+    79:  openCurrentGitHubLink,  // o
     191: focusSearchInput,  // /
     190: sync,             // .
     82:  sync,             // r

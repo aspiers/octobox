@@ -9,6 +9,9 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
     @notification2 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Second notification')
     @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
+    @notification1 = create_previewable_notification('First notification')
+    @notification2 = create_previewable_notification('Second notification')
+    @notification3 = create_previewable_notification('Third notification')
     sign_in_as(@user)
   end
 
@@ -372,6 +375,69 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
   def set_preview_scroll_top(value)
     page.execute_script("document.getElementById('thread').scrollTop = #{value}")
+  end
+
+  test 'enter retains the GitHub fallback when no preview is available' do
+    notification = create(:notification, user: @user, subject_title: 'No preview available')
+    visit '/'
+    current_row = make_current(notification)
+    link_selector = "##{current_row[:id]} td.notification-subject .link"
+    assert_no_selector "#{link_selector}.thread-link"
+    page.execute_script(<<~JS)
+      document.querySelector(#{link_selector.to_json}).addEventListener('click', function(event) {
+        event.preventDefault();
+        window.lastEnterFallbackUrl = this.href;
+      });
+    JS
+
+    send_keys :enter
+
+    assert_equal notification.web_url, page.evaluate_script('window.lastEnterFallbackUrl')
+    assert_no_selector '.flex-main.show-thread'
+  end
+
+  test 'o opens current notification on GitHub in a new window and marks it read' do
+    current_row = make_current(@notification1)
+    github_url = @notification1.web_url
+    page.execute_script(<<~JS)
+      document.addEventListener('click', function(event) {
+        var link = event.target.closest('a[data-octobox-github]');
+        if (!link) return;
+        event.preventDefault();
+        window.lastOpenedLink = { url: link.href, target: link.target, rel: link.rel };
+      }, true);
+    JS
+
+    send_keys 'o'
+
+    opened_link = page.evaluate_script('window.lastOpenedLink')
+    assert_equal github_url, opened_link['url']
+    assert_equal '_blank', opened_link['target']
+    assert_equal 'noopener', opened_link['rel']
+    assert_no_selector '.flex-main.show-thread'
+    assert_no_selector "##{current_row[:id]}.active"
+    sleep 0.3
+    refute @notification1.reload.unread
+  end
+
+  test 'o ignores unsafe notification URLs' do
+    current_row = make_current(@notification1)
+    page.execute_script(<<~JS)
+      document.getElementById(#{current_row[:id].to_json}).dataset.githubUrl = 'javascript:alert(1)';
+      document.addEventListener('click', function(event) {
+        if (event.target.closest('a[data-octobox-github]')) window.openedUnsafeLink = true;
+      }, true);
+    JS
+
+    send_keys 'o'
+    sleep 0.3
+
+    refute page.evaluate_script('window.openedUnsafeLink || false')
+    assert @notification1.reload.unread
+  end
+
+  def create_previewable_notification(title)
+    create(:notification, user: @user, subject: create(:subject), subject_title: title)
   end
 
   def send_keys(*keys)
