@@ -51,9 +51,72 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_no_selector '#help-box.show', wait: 2
   end
 
-  test 'slash focuses search box' do
+  test 'slash focuses search box and disables shortcuts while typing' do
     send_keys '/'
     assert_equal 'search-box', page.evaluate_script('document.activeElement.id')
+
+    find('#search-box').send_keys 'go'
+
+    assert_no_selector '#command-palette.show'
+  end
+
+  test 'g filters sidebar commands and enter follows the selected link' do
+    send_keys 'g'
+    assert_selector '#command-palette.show', wait: 2
+
+    input = find('#command-palette-input')
+    input.fill_in with: 'rch'
+    within '#command-palette-results' do
+      assert_selector '.command-palette-item', count: 1, text: 'Archive'
+    end
+
+    input.send_keys :enter
+
+    assert_current_path(/archive=true/, wait: 2)
+  end
+
+  test 'control-k opens the command palette and arrow keys change selection' do
+    send_keys :control, 'k'
+    assert_selector '#command-palette.show', wait: 2
+
+    input = find('#command-palette-input')
+    initial_selection = find('.command-palette-item.active').text
+    input.send_keys :down
+
+    refute_equal initial_selection, find('.command-palette-item.active').text
+    selected_item = find('.command-palette-item.active')
+    selected_item.send_keys :escape
+    assert_no_selector '#command-palette.show', wait: 2
+  end
+
+  test 'command shortcut is not intercepted on pages without the palette' do
+    visit '/settings'
+
+    prevented = page.evaluate_script(<<~JS)
+      (function() {
+        var event = new KeyboardEvent('keydown', {
+          key: 'k', ctrlKey: true, bubbles: true, cancelable: true
+        });
+        document.body.dispatchEvent(event);
+        return event.defaultPrevented;
+      })()
+    JS
+
+    refute prevented
+  end
+
+  test 'turbolinks does not cache an open command palette' do
+    send_keys 'g'
+    assert_selector '#command-palette.show', wait: 2
+
+    page.execute_script("Turbolinks.visit('/settings')")
+    assert_current_path '/settings', wait: 2
+    page.go_back
+    assert_current_path '/', wait: 2
+
+    assert_no_selector '#command-palette.show'
+    assert_no_selector '.modal-backdrop'
+    refute page.evaluate_script("document.body.classList.contains('modal-open')")
   end
 
   test 'x toggles checkbox on current row' do
