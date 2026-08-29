@@ -7,7 +7,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
     @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
-    @notification2 = create(:notification, user: @user, subject_title: 'Second notification')
+    @notification2 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Second notification')
     @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
     sign_in_as(@user)
   end
@@ -193,6 +193,60 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_includes star[:class], 'star-active'
   end
 
+  test 'enter opens current notification in the Octobox preview' do
+    current_row = make_current(@notification1)
+    assert_selector "##{current_row[:id]} a.thread-link"
+    assert_no_selector '.flex-main.show-thread'
+
+    send_keys :enter
+
+    assert_selector '.flex-main.show-thread', wait: 2
+    assert_selector '#notification-thread'
+  end
+
+  test 'brackets open the previous and next notifications in the preview' do
+    make_current(@notification2)
+    send_keys :enter
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+
+    previous_href = find('#thread a.previous.btn-outline-dark')[:href]
+    previous_id = previous_href[%r{/notifications/(\d+)}, 1]
+
+    send_keys '['
+    assert_selector "#notification-thread[data-id='#{previous_id}']", wait: 2
+
+    send_keys ']'
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+  end
+
+  test 'c focuses the reply composer in an open preview' do
+    Octobox.stubs(:fetch_subject?).returns(true)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#comment_body', wait: 2
+
+    send_keys 'c'
+
+    assert_equal 'comment_body', page.evaluate_script('document.activeElement.id')
+  end
+
+  test 'home and end move to the preview boundaries' do
+    page.current_window.resize_to(2400, 900)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#notification-thread', wait: 2
+    add_preview_spacer
+
+    send_keys :end
+    maximum_scroll = page.evaluate_script("document.getElementById('thread').scrollHeight - document.getElementById('thread').clientHeight")
+    assert_in_delta maximum_scroll, preview_scroll_top, 2
+
+    send_keys :home
+    assert_in_delta 0, preview_scroll_top, 2
+  ensure
+    page.current_window.resize_to(1400, 900)
+  end
+
   test 'preview scrolling shortcuts move by full and half pages' do
     open_scrollable_preview
 
@@ -278,11 +332,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_selector '.flex-main.show-thread', wait: 2
     assert_selector '#notification-thread'
 
-    page.execute_script(<<~JS)
-      var spacer = document.createElement('div');
-      spacer.style.height = '5000px';
-      document.getElementById('notification-thread').appendChild(spacer);
-    JS
+    add_preview_spacer
   end
 
   def shortcut_prevented?(which, target: 'document.body', ctrl: false, shift: false, alt: false, meta: false)
@@ -306,6 +356,14 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   def make_current(notification)
     page.execute_script("Octobox.markRowCurrent(document.getElementById('notification-#{notification.id}'))")
     find("#notification-#{notification.id}")
+  end
+
+  def add_preview_spacer
+    page.execute_script(<<~JS)
+      var spacer = document.createElement('div');
+      spacer.style.height = '5000px';
+      document.getElementById('notification-thread').appendChild(spacer);
+    JS
   end
 
   def preview_scroll_top

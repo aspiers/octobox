@@ -742,12 +742,7 @@ var Octobox = (function() {
     }
   } ;
 
-  var viewThread = function(e) {
-    e.preventDefault();
-    var link = e.target.closest('.thread-link');
-    if (!link) return;
-    var href = link.getAttribute('href');
-
+  var loadThread = function(href) {
     history.pushState({thread: href}, 'Octobox', href);
 
     var thread = document.getElementById('thread');
@@ -776,6 +771,13 @@ var Octobox = (function() {
     if (flexContent) flexContent.classList.remove("active");
     subscribeToComments();
     return false;
+  }
+
+  var viewThread = function(e) {
+    e.preventDefault();
+    var link = e.target.closest('.thread-link');
+    if (!link) return;
+    return loadThread(link.getAttribute('href'));
   }
 
   var expandComments = function(e) {
@@ -923,20 +925,59 @@ var Octobox = (function() {
     }
   };
 
-  var scrollThread = function(e, pageFraction) {
+  var threadIsOpen = function() {
     var flexMain = document.querySelector(".flex-main");
+    return DOM.thread && flexMain && flexMain.classList.contains("show-thread");
+  };
+
+  var scrollThread = function(e, pageFraction) {
     var helpBox = document.getElementById("help-box");
-    if (!DOM.thread || !flexMain || !flexMain.classList.contains("show-thread")) return;
+    if (!threadIsOpen()) return;
     if (helpBox && helpBox.classList.contains("show")) return;
 
     e.preventDefault();
     DOM.thread.scrollBy(0, DOM.thread.clientHeight * pageFraction);
   };
 
+  var scrollThreadTo = function(e, position) {
+    if (!threadIsOpen()) return;
+
+    e.preventDefault();
+    DOM.thread.scrollTo(0, position);
+  };
+
+  var openAdjacentThread = function(e, selector) {
+    if (!threadIsOpen()) return;
+
+    var link = DOM.thread.querySelector(selector + ".btn-outline-dark");
+    if (!link) return;
+
+    e.preventDefault();
+    var href = link.getAttribute("href");
+    var notificationId = href.match(/\/notifications\/(\d+)/);
+    var row = notificationId && document.getElementById("notification-" + notificationId[1]);
+    if (row) markRowCurrent(row);
+    loadThread(href);
+  };
+
+  var focusReplyComposer = function(e) {
+    if (!threadIsOpen()) return;
+
+    var composer = DOM.thread.querySelector("#comment_body");
+    if (!composer) return;
+
+    e.preventDefault();
+    composer.focus();
+  };
+
   var scrollThreadPageDown = function(e) { scrollThread(e, 1); };
   var scrollThreadPageUp = function(e) { scrollThread(e, -1); };
   var scrollThreadHalfPageDown = function(e) { scrollThread(e, 0.5); };
   var scrollThreadHalfPageUp = function(e) { scrollThread(e, -0.5); };
+  var scrollThreadToTop = function(e) { scrollThreadTo(e, 0); };
+  var scrollThreadToBottom = function(e) { scrollThreadTo(e, DOM.thread.scrollHeight); };
+  var openPreviousThread = function(e) { openAdjacentThread(e, ".previous"); };
+  var openNextThread = function(e) { openAdjacentThread(e, ".next"); };
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
@@ -953,10 +994,10 @@ var Octobox = (function() {
   };
 
   var autoSync = function() {
-    hasMarkedRows() || sync()
+    if (!hasMarkedRows()) sync();
   };
 
-  var escPressed = function(e) {
+  var escPressed = function() {
     var helpBox = document.getElementById("help-box");
     if (helpBox && helpBox.classList.contains("show")) {
       // Bootstrap 4 requires jQuery for modal hide
@@ -1028,6 +1069,7 @@ var Octobox = (function() {
 
   var shortcuts = {
     65:  checkSelectAll,   // a
+    67:  focusReplyComposer, // c
     68:  markReadSelected, // d
     74:  cursorDown,       // j
     75:  cursorUp,         // k
@@ -1038,15 +1080,19 @@ var Octobox = (function() {
     89:  toggleArchive,    // y
     69:  toggleArchive,    // e
     77:  muteSelected,     // m
-    8:   scrollThreadPageUp,   // Backspace
-    13:  openCurrentLink,      // Enter
-    32:  scrollThreadPageDown, // Space
-    79:  openCurrentLink,      // o
+    8:   scrollThreadPageUp,     // Backspace
+    13:  openCurrentLink,        // Enter
+    32:  scrollThreadPageDown,   // Space
+    35:  scrollThreadToBottom,   // End
+    36:  scrollThreadToTop,      // Home
+    79:  openCurrentLink,        // o
     191: focusSearchInput,  // /
     190: sync,             // .
     82:  sync,             // r
     27:  escPressed,       // esc
-    51:  deleteSelected    // #
+    51:  deleteSelected,   // #
+    219: openPreviousThread, // [
+    221: openNextThread     // ]
   }
   var unread_count = 0;
   var lastCheckedNotification = null;
