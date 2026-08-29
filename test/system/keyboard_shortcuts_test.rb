@@ -7,8 +7,8 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
     @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
-    @notification2 = create(:notification, user: @user, subject_title: 'Second notification')
-    @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
+    @notification2 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Second notification')
+    @notification3 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Third notification')
     sign_in_as(@user)
   end
 
@@ -205,6 +205,48 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
   def set_preview_scroll_top(value)
     page.execute_script("document.getElementById('thread').scrollTop = #{value}")
+  end
+
+  test 'shift-e archives the current notification and opens the next preview' do
+    current_row = make_current(@notification2)
+    current_row_id = current_row[:id]
+    find("##{current_row_id} a.thread-link").click
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+    next_href = find('#thread a.next.btn-outline-dark')[:href]
+    next_id = next_href[%r{/notifications/(\d+)}, 1]
+
+    send_keys :shift, 'e'
+
+    assert_selector "#notification-thread[data-id='#{next_id}']", wait: 2
+    assert_no_selector "##{current_row_id}"
+    assert @notification2.reload.archived?
+  end
+
+  test 'shift-y archives and advances the list cursor' do
+    current_row = make_current(@notification2)
+    current_row_id = current_row[:id]
+    next_row_id = page.evaluate_script("document.getElementById('#{current_row_id}').nextElementSibling.id")
+
+    send_keys :shift, 'y'
+
+    assert_no_selector "##{current_row_id}", wait: 2
+    assert_equal next_row_id, find('td.js-current').ancestor('tr')[:id]
+    assert_no_selector '.flex-main.show-thread'
+    assert @notification2.reload.archived?
+  end
+
+  test 'archive-and-advance archives all marked notifications' do
+    first_row_id = make_current(@notification1)[:id]
+    send_keys 'x'
+    second_row_id = make_current(@notification2)[:id]
+    send_keys 'x'
+
+    send_keys :shift, 'e'
+
+    assert_no_selector "##{first_row_id}", wait: 2
+    assert_no_selector "##{second_row_id}"
+    assert @notification1.reload.archived?
+    assert @notification2.reload.archived?
   end
 
   def send_keys(*keys)
