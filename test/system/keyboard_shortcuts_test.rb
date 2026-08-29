@@ -55,24 +55,48 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys '/'
     assert_equal 'search-box', page.evaluate_script('document.activeElement.id')
 
-    find('#search-box').send_keys 'go'
+    find('#search-box').send_keys 'gi'
 
     assert_no_selector '#command-palette.show'
+    assert_current_path '/'
   end
 
-  test 'g filters sidebar commands and enter follows the selected link' do
-    send_keys 'g'
-    assert_selector '#command-palette.show', wait: 2
-
-    input = find('#command-palette-input')
-    input.fill_in with: 'rch'
-    within '#command-palette-results' do
-      assert_selector '.command-palette-item', count: 1, text: 'Archive'
+  test 'g chords navigate directly to fixed sidebar destinations' do
+    {
+      'a' => /archive=true/,
+      's' => /starred=true/,
+      'r' => /unread=false/,
+      'u' => /unread=true/
+    }.each do |key, expected_path|
+      visit '/'
+      send_keys 'g'
+      assert_no_selector '#command-palette.show'
+      send_keys key
+      assert_current_path expected_path, wait: 2
     end
 
-    input.send_keys :enter
+    send_keys 'g'
+    send_keys 'i'
+    assert_current_path '/', wait: 2
+  end
 
-    assert_current_path(/archive=true/, wait: 2)
+  test 'unknown and timed-out g chords do not trigger or poison shortcuts' do
+    current_row = find('td.js-current').ancestor('tr')
+    checkbox = current_row.find('input[type="checkbox"]', visible: :all)
+
+    send_keys 'g'
+    send_keys 'x'
+    refute checkbox.checked?
+
+    send_keys 'x'
+    assert checkbox.checked?
+    send_keys 'x'
+
+    send_keys 'g'
+    page.execute_script("setTimeout(function() { document.body.dataset.gotoTimeout = 'done'; }, 1100);")
+    assert_selector "body[data-goto-timeout='done']", visible: :all, wait: 2
+    send_keys 'x'
+    assert checkbox.checked?
   end
 
   test 'command palette ranks prefix matches before other substring matches' do
@@ -82,7 +106,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
       links[1].textContent = 'Target starts here';
     JS
 
-    send_keys 'g'
+    send_keys :control, 'k'
     find('#command-palette-input').fill_in with: 'target'
 
     matches = all('.command-palette-item').map(&:text)
@@ -102,6 +126,13 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     selected_item = find('.command-palette-item.active')
     selected_item.send_keys :escape
     assert_no_selector '#command-palette.show', wait: 2
+
+    page.execute_script(<<~JS)
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'k', metaKey: true, bubbles: true, cancelable: true
+      }));
+    JS
+    assert_selector '#command-palette.show', wait: 2
   end
 
   test 'command shortcut is not intercepted on pages without the palette' do
@@ -121,7 +152,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   end
 
   test 'turbolinks does not cache an open command palette' do
-    send_keys 'g'
+    send_keys :control, 'k'
     assert_selector '#command-palette.show', wait: 2
 
     page.execute_script("Turbolinks.visit('/settings')")

@@ -179,6 +179,8 @@ var Octobox = (function() {
     window.current_id = undefined;
 
     document.addEventListener('keydown', function(e) {
+      if (e.defaultPrevented) return;
+
       // disable shortcuts while typing or using button-like controls
       var helpBox = document.getElementById("help-box");
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
@@ -407,7 +409,7 @@ var Octobox = (function() {
     if (!table) return;
     var refresh_interval = parseInt(table.dataset.refreshInterval, 10);
     if (isNaN(refresh_interval)) return;
-    refresh_interval > 0 && setInterval(autoSync, refresh_interval)
+    if (refresh_interval > 0) setInterval(autoSync, refresh_interval);
   };
 
   var recoverPreviousCursorPosition = function() {

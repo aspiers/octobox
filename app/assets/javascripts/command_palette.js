@@ -3,6 +3,16 @@ var CommandPalette = (function() {
   var visibleCommands = [];
   var selectedIndex = 0;
   var initialized = false;
+  var pendingGoto = false;
+  var gotoTimer;
+  var gotoLabels = {
+    a: "Archive",
+    i: "Inbox",
+    r: "Read",
+    s: "Starred",
+    u: "Unread"
+  };
+  var GOTO_TIMEOUT = 1000;
 
   var modalElement = function() {
     return document.querySelector("#command-palette");
@@ -41,6 +51,22 @@ var CommandPalette = (function() {
     }).filter(function(command) {
       return command.label.length > 0;
     });
+  };
+
+  var resetGoto = function() {
+    pendingGoto = false;
+    if (gotoTimer) clearTimeout(gotoTimer);
+    gotoTimer = undefined;
+  };
+
+  var navigateToSidebar = function(key) {
+    var label = gotoLabels[key];
+    if (!label) return;
+
+    var command = sidebarCommands().find(function(candidate) {
+      return candidate.label === label;
+    });
+    if (command) command.link.click();
   };
 
   var clearResults = function(results) {
@@ -167,9 +193,27 @@ var CommandPalette = (function() {
       return;
     }
 
+    var typing = isTypingTarget(event.target);
+    if (pendingGoto) {
+      resetGoto();
+      if (typing) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigateToSidebar(event.key.toLowerCase());
+      return;
+    }
+
     var commandKey = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
-    var prefixKey = !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "g";
-    if (commandKey || (prefixKey && !isTypingTarget(event.target))) open(event);
+    var prefixKey = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "g";
+    if (commandKey) {
+      open(event);
+    } else if (prefixKey && !typing) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      pendingGoto = true;
+      gotoTimer = setTimeout(resetGoto, GOTO_TIMEOUT);
+    }
   };
 
   var removeBeforeCache = function() {
@@ -184,7 +228,7 @@ var CommandPalette = (function() {
     if (initialized) return;
     initialized = true;
 
-    document.addEventListener("keydown", handleKeydown);
+    document.addEventListener("keydown", handleKeydown, true);
     document.addEventListener("input", function(event) {
       if (event.target.matches("#command-palette-input")) render(event.target.value);
     });
