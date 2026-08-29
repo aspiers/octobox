@@ -279,6 +279,38 @@ var Octobox = (function() {
     });
   };
 
+  var markUnreadSelected = function() {
+    if (getDisplayedRows().length === 0) return;
+    var rows = getMarkedOrCurrentRows();
+    if (rows.length === 0) return;
+
+    rows.forEach(row => row.classList.add("blur-action"));
+
+    var formData = new FormData();
+    var ids = getIdsFromRows(rows);
+    if (Array.isArray(ids)) {
+      ids.forEach(id => formData.append('id[]', id));
+    } else {
+      formData.append('id[]', ids);
+    }
+
+    postRequest("/notifications/mark_unread_selected" + location.search, formData)
+    .then(response => {
+      if (response.ok) {
+        rows.forEach(row => {
+          row.classList.remove("blur-action");
+          row.classList.add("active");
+        });
+        updateFavicon();
+      } else {
+        throw new Error('Request failed');
+      }
+    })
+    .catch(() => {
+      notify("Could not mark notification(s) unread", "danger");
+    });
+  };
+
   var toggleArchive = function() {
     if (document.querySelector(".archive_toggle").classList.contains("archive_selected")) {
       archiveSelected()
@@ -1032,6 +1064,7 @@ var Octobox = (function() {
     78:  nextPage,         // n
     80:  prevPage,         // p
     83:  toggleStar,       // s
+    85:  markUnreadSelected, // u
     88:  markCurrent,      // x
     89:  toggleArchive,    // y
     69:  toggleArchive,    // e

@@ -105,6 +105,12 @@ class Notification < ApplicationRecord
     where(id: unread.map(&:id)).update_all(unread: false)
   end
 
+  # GitHub has no API for marking a notification thread unread.
+  def self.mark_unread(notifications)
+    read = notifications.reject(&:unread)
+    where(id: read.map(&:id)).update_all(unread: true)
+  end
+
   def self.mark_read_on_github(user, notification_ids)
     conn = user.github_client.client_without_redirects
     manager = Typhoeus::Hydra.new(max_concurrency: Octobox.config.max_concurrency)
