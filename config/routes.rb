@@ -75,6 +75,7 @@ Rails.application.routes.draw do
       post :syncing
       post :mute_selected
       post :mark_read_selected
+      post :undo
       get  :unread_count
       get  :lookup
       post :delete_selected

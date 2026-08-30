@@ -10,10 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_30_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_30_004000) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
-  enable_extension "plpgsql"
 
   create_table "app_installation_permissions", force: :cascade do |t|
     t.integer "app_installation_id"
@@ -59,6 +59,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_30_000000) do
     t.bigint "github_id"
     t.index ["name"], name: "index_labels_on_name"
     t.index ["subject_id"], name: "index_labels_on_subject_id"
+  end
+
+  create_table "notification_undo_actions", force: :cascade do |t|
+    t.integer "user_id", null: false
+    t.string "token", null: false
+    t.string "action_type", null: false
+    t.integer "snapshot_version", default: 1, null: false
+    t.jsonb "states", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_notification_undo_actions_on_token", unique: true
+    t.index ["user_id"], name: "index_notification_undo_actions_on_user_id"
   end
 
   create_table "notifications", id: :serial, force: :cascade do |t|
@@ -180,4 +192,5 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_30_000000) do
   end
 
   add_foreign_key "labels", "subjects", on_update: :cascade, on_delete: :cascade
+  add_foreign_key "notification_undo_actions", "users"
 end

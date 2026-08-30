@@ -96,7 +96,10 @@ class NotificationsController < ApplicationController
   end
 
   def mute_selected
-    Notification.mute(selected_notifications)
+    notifications = selected_notifications
+    undo_action = capture_undo(:mute, notifications)
+    Notification.mute(notifications, undo_action: undo_action)
+    expose_undo_token(undo_action)
     if request.xhr?
       head :ok
     else
@@ -105,7 +108,10 @@ class NotificationsController < ApplicationController
   end
 
   def archive_selected
-    Notification.archive(selected_notifications, params[:value])
+    notifications = selected_notifications
+    undo_action = capture_undo(:archive, notifications)
+    Notification.archive(notifications, params[:value], undo_action: undo_action)
+    expose_undo_token(undo_action)
     if request.xhr?
       head :ok
     else
@@ -119,12 +125,21 @@ class NotificationsController < ApplicationController
   end
 
   def delete_selected
-    selected_notifications.delete_all
+    notifications = selected_notifications
+    undo_action = capture_undo(:delete, notifications)
+    notifications.delete_all
+    expose_undo_token(undo_action)
     if request.xhr?
       head :ok
     else
       redirect_back fallback_location: root_path
     end
+  end
+
+  def undo
+    undo_action = current_user.notification_undo_actions.find_by!(token: params[:token])
+    undo_action.undo!
+    head :ok
   end
 
   def star
@@ -157,5 +172,21 @@ class NotificationsController < ApplicationController
     else
       render json: { error: Sidekiq::Status::get(current_user.sync_job_id, :exception) }, status: :ok
     end
+  end
+
+  private
+
+  def capture_undo(action_type, notifications)
+    return unless request.xhr?
+
+    NotificationUndoAction.capture!(
+      user: current_user,
+      action_type: action_type,
+      notifications: notifications
+    )
+  end
+
+  def expose_undo_token(undo_action)
+    response.set_header('X-Octobox-Undo-Token', undo_action.token) if undo_action
   end
 end

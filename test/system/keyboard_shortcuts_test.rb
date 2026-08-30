@@ -253,6 +253,140 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert @notification2.reload.archived?
   end
 
+  test 'control-z restores an archive-and-advance action and its cursor' do
+    row_id = make_current(@notification2)[:id]
+    send_keys :shift, 'y'
+    assert_no_selector "##{row_id}", wait: 2
+    assert @notification2.reload.archived?
+
+    send_keys :control, 'z'
+
+    assert_selector "##{row_id}", wait: 2
+    refute @notification2.reload.archived?
+    assert_equal row_id, find('td.js-current').ancestor('tr')[:id]
+  end
+
+  test 'control-z restores an archived notification without reloading' do
+    row_id = make_current(@notification1)[:id]
+    send_keys 'e'
+    assert_no_selector "##{row_id}", wait: 2
+
+    send_keys :control, 'z'
+
+    assert_selector "##{row_id}", wait: 2
+    refute @notification1.reload.archived?
+
+    within "##{row_id}" do
+      find('.notification-checkbox .custom-checkbox').click
+      assert find('input[type="checkbox"]', visible: :all).checked?
+    end
+  end
+
+  test 'undo is discarded after navigating away from the notification list' do
+    row_id = make_current(@notification1)[:id]
+    send_keys 'e'
+    assert_no_selector "##{row_id}", wait: 2
+
+    page.execute_script("Turbolinks.visit('/settings')")
+    assert_current_path '/settings', wait: 2
+    send_keys :control, 'z'
+    assert @notification1.reload.archived?
+
+    page.execute_script("Turbolinks.visit('/')")
+    assert_current_path '/', wait: 2
+    send_keys :control, 'z'
+    assert_no_selector "##{row_id}"
+    assert @notification1.reload.archived?
+  end
+
+  test 'an in-flight action cannot restore undo state after navigation' do
+    row_id = make_current(@notification1)[:id]
+    page.execute_script(<<~JS)
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (!url.includes('/notifications/archive_selected')) return originalFetch(url, options);
+
+        return new Promise(function(resolve, reject) {
+          window.releaseArchiveRequest = function() {
+            originalFetch(url, options).then(function(response) {
+              document.body.dataset.archiveRequestFinished = 'true';
+              resolve(response);
+            }, reject);
+          };
+        });
+      };
+    JS
+
+    send_keys 'e'
+    page.execute_script("Turbolinks.visit('/settings')")
+    assert_current_path '/settings', wait: 2
+    page.execute_script('window.releaseArchiveRequest()')
+    assert_selector "body[data-archive-request-finished='true']", visible: :all, wait: 2
+    assert_current_path '/settings'
+
+    page.execute_script("Turbolinks.visit('/')")
+    assert_current_path '/', wait: 2
+    send_keys :control, 'z'
+    assert_no_selector "##{row_id}"
+    assert @notification1.reload.archived?
+  end
+
+  test 'control-z restores a muted notification' do
+    row_id = make_current(@notification1)[:id]
+    send_keys 'm'
+    assert_no_selector "##{row_id}", wait: 2
+
+    send_keys :control, 'z'
+
+    assert_selector "##{row_id}", wait: 2
+    @notification1.reload
+    refute @notification1.archived?
+    assert @notification1.unread?
+    assert_nil @notification1.muted_at
+  end
+
+  test 'command-z restores a deleted notification' do
+    row_id = make_current(@notification1)[:id]
+    find("##{row_id} a.thread-link").click
+    assert_selector '#notification-thread', wait: 2
+    page.execute_script('Octobox.deleteThread()')
+    assert_no_selector "##{row_id}", wait: 2
+    refute Notification.exists?(@notification1.id)
+
+    page.execute_script(<<~JS)
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'z', metaKey: true, bubbles: true, cancelable: true
+      }));
+    JS
+
+    assert_selector "##{row_id}", wait: 2
+    assert Notification.exists?(@notification1.id)
+  end
+
+  test 'undo preserves native typing and consumes only the latest action' do
+    first_row_id = make_current(@notification1)[:id]
+    send_keys 'e'
+    assert_no_selector "##{first_row_id}", wait: 2
+
+    second_row_id = make_current(@notification2)[:id]
+    send_keys 'm'
+    assert_no_selector "##{second_row_id}", wait: 2
+
+    send_keys '/'
+    find('#search-box').send_keys 'draft'
+    find('#search-box').send_keys :control, 'z'
+    assert @notification2.reload.muted_at?
+
+    find('#search-box').send_keys :escape
+    send_keys :control, 'z'
+    assert_selector "##{second_row_id}", wait: 2
+    assert @notification1.reload.archived?
+
+    send_keys :control, 'z'
+    assert_no_selector "##{first_row_id}"
+    assert @notification1.reload.archived?
+  end
+
   def send_keys(*keys)
     find('body').send_keys(*keys)
   end

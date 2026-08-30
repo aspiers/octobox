@@ -76,11 +76,13 @@ class Notification < ApplicationRecord
     repository.try(:display_subject?) || user.has_personal_plan?
   end
 
-  def self.archive(notifications, value)
+  def self.archive(notifications, value, undo_action: nil)
     value = value ? ActiveRecord::Type::Boolean.new.cast(value) : true
     notifications.update_all(archived: value)
     user = notifications.first.try(:user)
-    ArchiveWorker.perform_async_if_configured(user.id, notifications.map(&:github_id)) if user && value
+    if user && value
+      ArchiveWorker.perform_async_if_configured(user.id, notifications.map(&:github_id), undo_action&.id)
+    end
   end
 
   def self.archive_on_github(user, notification_ids)
@@ -119,10 +121,14 @@ class Notification < ApplicationRecord
     end
   end
 
-  def self.mute(notifications)
+  def self.mute(notifications, undo_action: nil)
     return if notifications.empty?
     user = notifications.to_a.first.user
-    MuteNotificationsWorker.perform_async_if_configured(user.id, notifications.map(&:github_id))
+    MuteNotificationsWorker.perform_async_if_configured(
+      user.id,
+      notifications.map(&:github_id),
+      undo_action&.id
+    )
     where(id: notifications.map(&:id)).update_all(archived: true, unread: false, muted_at: Time.current)
   end
 
@@ -134,6 +140,20 @@ class Notification < ApplicationRecord
         notification_ids.each do |id|
           conn.patch "notifications/threads/#{id}"
           conn.put "notifications/threads/#{id}/subscription", {ignored: true}.to_json
+        end
+      end
+    rescue Octokit::Forbidden, Octokit::NotFound, Octokit::Unauthorized
+      # one or more notifications are for repos the user no longer has access to
+    end
+  end
+
+  def self.unmute_on_github(user, notification_ids)
+    conn = user.github_client.client_without_redirects
+    manager = Typhoeus::Hydra.new(max_concurrency: Octobox.config.max_concurrency)
+    begin
+      conn.in_parallel(manager) do
+        notification_ids.each do |id|
+          conn.put "notifications/threads/#{id}/subscription", {ignored: false}.to_json
         end
       end
     rescue Octokit::Forbidden, Octokit::NotFound, Octokit::Unauthorized

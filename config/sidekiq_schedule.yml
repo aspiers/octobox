@@ -3,3 +3,9 @@ sync_notifications:
   class: SyncAllUserNotificationsWorker
   queue: sync_notifications
   description: 'Automatically Sync Notifications for all Users'
+
+cleanup_notification_undo_actions:
+  cron: '17 * * * *'
+  class: NotificationUndoCleanupWorker
+  queue: user
+  description: 'Delete expired notification undo snapshots'

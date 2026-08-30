@@ -233,7 +233,10 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     notification2 = create(:notification, user: @user, archived: false)
     create(:notification, user: @user, archived: false)
 
-    Notification.expects(:mute).with([notification1, notification2])
+    Notification.expects(:mute).with(
+      [notification1, notification2],
+      undo_action: instance_of(NotificationUndoAction)
+    )
 
     post '/notifications/mute_selected', params: { id: [notification1.id, notification2.id] }, xhr: true
     assert_response :ok
@@ -246,7 +249,10 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     notification2 = create(:notification, user: @user, archived: false)
     notification3 = create(:notification, user: @user, archived: false)
 
-    Notification.expects(:mute).with([notification1, notification2, notification3])
+    Notification.expects(:mute).with(
+      [notification1, notification2, notification3],
+      undo_action: instance_of(NotificationUndoAction)
+    )
 
     post '/notifications/mute_selected', params: { id: ['all'] }, xhr: true
     assert_response :ok
@@ -275,6 +281,57 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
     post '/notifications/mark_read_selected', params: { id: ['all'] }
     assert_response :ok
+  end
+
+  test 'undo restores an archived notification' do
+    sign_in_as(@user)
+    ArchiveWorker.stubs(:perform_async_if_configured)
+    notification = create(:notification, user: @user, archived: false)
+
+    post '/notifications/archive_selected', params: { id: [notification.id], value: true }, xhr: true
+    token = response.headers['X-Octobox-Undo-Token']
+    assert_predicate token, :present?
+    assert notification.reload.archived?
+
+    post '/notifications/undo', params: { token: token }, xhr: true
+
+    assert_response :ok
+    refute notification.reload.archived?
+  end
+
+  test 'undo restores a muted notification' do
+    sign_in_as(@user)
+    MuteNotificationsWorker.stubs(:perform_async_if_configured)
+    UnmuteNotificationsWorker.stubs(:perform_async_if_configured)
+    notification = create(:notification, user: @user, archived: false, unread: true, muted_at: nil)
+
+    post '/notifications/mute_selected', params: { id: [notification.id] }, xhr: true
+    token = response.headers['X-Octobox-Undo-Token']
+    assert_predicate token, :present?
+    assert notification.reload.muted_at?
+
+    post '/notifications/undo', params: { token: token }, xhr: true
+
+    notification.reload
+    assert_response :ok
+    refute notification.archived?
+    assert notification.unread?
+    assert_nil notification.muted_at
+  end
+
+  test 'undo recreates a deleted notification' do
+    sign_in_as(@user)
+    notification = create(:notification, user: @user)
+
+    post '/notifications/delete_selected', params: { id: [notification.id] }, xhr: true
+    token = response.headers['X-Octobox-Undo-Token']
+    assert_predicate token, :present?
+    refute Notification.exists?(notification.id)
+
+    post '/notifications/undo', params: { token: token }, xhr: true
+
+    assert_response :ok
+    assert Notification.exists?(notification.id)
   end
 
   test 'toggles starred on a notification' do

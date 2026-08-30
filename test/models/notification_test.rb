@@ -67,6 +67,19 @@ class NotificationTest < ActiveSupport::TestCase
     refute notification2.reload.unread?
   end
 
+  test '#unmute_on_github restores thread subscriptions' do
+    user = create(:user)
+    notification = create(:notification, user: user)
+    request = stub_request(
+      :put,
+      "https://api.github.com/notifications/threads/#{notification.github_id}/subscription"
+    ).with(body: { ignored: false }.to_json).to_return(status: 200)
+
+    Notification.unmute_on_github(user, [notification.github_id])
+
+    assert_requested request
+  end
+
   test '#mark_read doesnt fail if nothing is to be marked as read' do
     user = create(:user)
     notification1 = create(:notification, user: user, unread: false)
