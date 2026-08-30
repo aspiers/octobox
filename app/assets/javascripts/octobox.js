@@ -45,7 +45,7 @@ var Octobox = (function() {
         return response.json();
       })
       .then(data => {
-        pinned_search.innerHTML = data.count;
+        pinned_search.textContent = data.count;
       })
       .catch(() => {
         pinned_search.remove();
@@ -488,13 +488,28 @@ var Octobox = (function() {
     });
   };
 
+  var replaceChildrenFromNode = function(target, source) {
+    var children = Array.from(source.childNodes).map(function(node) {
+      return node.cloneNode(true);
+    });
+    target.replaceChildren.apply(target, children);
+  };
+
+  var replaceChildrenFromHtml = function(target, html) {
+    var parsed = new DOMParser().parseFromString(html, "text/html");
+    var children = Array.from(parsed.body.childNodes).map(function(node) {
+      return document.importNode(node, true);
+    });
+    target.replaceChildren.apply(target, children);
+  };
+
   var toggleStarClick = function(row) {
     star(row.dataset.id)
   };
 
   var star = function(id){
-    var fill_star_path = '<path fill-rule="evenodd" d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"></path>'
-    var empty_star_path = '<path fill-rule="evenodd" d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25zm0 2.445L6.615 5.5a.75.75 0 01-.564.41l-3.097.45 2.24 2.184a.75.75 0 01.216.664l-.528 3.084 2.769-1.456a.75.75 0 01.698 0l2.77 1.456-.53-3.084a.75.75 0 01.216-.664l2.24-2.183-3.096-.45a.75.75 0 01-.564-.41L8 2.694v.001z"></path>'
+    var fill_star_path = 'M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z';
+    var empty_star_path = 'M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25zm0 2.445L6.615 5.5a.75.75 0 01-.564.41l-3.097.45 2.24 2.184a.75.75 0 01.216.664l-.528 3.084 2.769-1.456a.75.75 0 01.698 0l2.77 1.456-.53-3.084a.75.75 0 01.216-.664l2.24-2.183-3.096-.45a.75.75 0 01-.564-.41L8 2.694v.001z';
 
     var notificationRow = document.getElementById("notification-" + id);
     var svg = null;
@@ -522,13 +537,19 @@ var Octobox = (function() {
         element.classList.add('star-active');
         element.classList.remove('octicon-star');
         element.classList.add('octicon-star-fill');
-        element.innerHTML = fill_star_path;
+        var filledPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        filledPath.setAttribute("fill-rule", "evenodd");
+        filledPath.setAttribute("d", fill_star_path);
+        element.replaceChildren(filledPath);
       } else {
         element.classList.remove('star-active');
         element.classList.add('star-inactive');
         element.classList.remove('octicon-star-fill');
         element.classList.add('octicon-star');
-        element.innerHTML = empty_star_path;
+        var emptyPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        emptyPath.setAttribute("fill-rule", "evenodd");
+        emptyPath.setAttribute("d", empty_star_path);
+        element.replaceChildren(emptyPath);
       }
     }
 
@@ -687,13 +708,13 @@ var Octobox = (function() {
       if(event.state && event.state.thread){
         var thread = document.getElementById('thread');
         var loading = document.getElementById('loading');
-        if (thread && loading) thread.innerHTML = loading.innerHTML;
+        if (thread && loading) replaceChildrenFromNode(thread, loading);
 
         fetch(event.state.thread, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(response => response.text())
           .then(data => {
             var thread = document.getElementById('thread');
-            if (thread) thread.innerHTML = data;
+            if (thread) replaceChildrenFromHtml(thread, data);
           });
       }
     };
@@ -750,7 +771,7 @@ var Octobox = (function() {
 
     var thread = document.getElementById('thread');
     var loading = document.getElementById('loading');
-    if (thread && loading) thread.innerHTML = loading.innerHTML;
+    if (thread && loading) replaceChildrenFromNode(thread, loading);
 
     fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => {
@@ -762,7 +783,7 @@ var Octobox = (function() {
           notify(data.error, "danger");
         } else {
           var thread = document.getElementById('thread');
-          if (thread) thread.innerHTML = data;
+          if (thread) replaceChildrenFromHtml(thread, data);
         }
       });
 
@@ -786,7 +807,7 @@ var Octobox = (function() {
 
     var moreComments = document.getElementById('more-comments');
     var loading = document.getElementById('loading');
-    if (moreComments && loading) moreComments.innerHTML = loading.innerHTML;
+    if (moreComments && loading) replaceChildrenFromNode(moreComments, loading);
 
     fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => {
@@ -798,7 +819,7 @@ var Octobox = (function() {
           notify(data.error, "danger");
         } else {
           var moreComments = document.getElementById('more-comments');
-          if (moreComments) moreComments.innerHTML = data;
+          if (moreComments) replaceChildrenFromHtml(moreComments, data);
         }
       });
 
@@ -938,16 +959,19 @@ var Octobox = (function() {
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
-    var alert_html = [
-      "<div class='flex-header header-flash-messages'>",
-      "  <div class='alert alert-" + type + " fade show'>",
-      "    <button class='close' data-dismiss='alert'>x</button>",
-             message,
-      "  </div>",
-      "</div>"
-    ].join("\n");
+    var header = document.createElement("div");
+    header.className = "flex-header header-flash-messages";
+    var alert = document.createElement("div");
+    alert.className = "alert alert-" + type + " fade show";
+    var close = document.createElement("button");
+    close.className = "close";
+    close.dataset.dismiss = "alert";
+    close.textContent = "x";
+    alert.append(close, document.createTextNode(message));
+    header.append(alert);
+
     var flexHeader = document.querySelector(".flex-header");
-    if (flexHeader) flexHeader.insertAdjacentHTML('afterend', alert_html);
+    if (flexHeader) flexHeader.after(header);
   };
 
   var autoSync = function() {
