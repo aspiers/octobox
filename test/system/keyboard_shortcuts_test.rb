@@ -41,6 +41,9 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :shift, '/'
     assert_selector '#help-box.show', wait: 2
     assert_text 'Keyboard shortcuts'
+    assert_text 'Done for now; returns on new activity'
+    assert_text 'Done for now, then open the next notification'
+    assert_text 'Remove Octobox copy; GitHub unchanged'
   end
 
   test 'escape closes help modal' do
