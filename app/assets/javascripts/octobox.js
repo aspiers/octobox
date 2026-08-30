@@ -44,7 +44,7 @@ var Octobox = (function() {
     var target = new URL(href, window.location.href);
     if (target.origin !== window.location.origin) return false;
 
-    window.location.assign(target.href);
+    Turbolinks.visit(target.href);
     return true;
   };
 
