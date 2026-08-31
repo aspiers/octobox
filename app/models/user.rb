@@ -131,7 +131,7 @@ class User < ApplicationRecord
   end
 
   def effective_access_token
-    github_client&.access_token
+    personal_access_token_enabled? ? personal_access_token : access_token
   end
 
   def masked_personal_access_token

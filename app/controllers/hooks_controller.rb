@@ -4,6 +4,11 @@ class HooksController < ApplicationController
   ].freeze
   REPOSITORY_LIFECYCLE_EVENTS = %w[push create delete].freeze
 
+  METADATA_ACTIONS = %w[
+    labeled unlabeled assigned unassigned milestoned demilestoned locked unlocked
+    transferred connected disconnected
+  ].freeze
+
   skip_before_action :verify_authenticity_token
   skip_before_action :authenticate_user!
   before_action :authenticate_github_request!
@@ -11,7 +16,11 @@ class HooksController < ApplicationController
   def create
     case event_header
     when 'issues'
-      sync_subject(payload['issue'])
+      sync_subject(
+        transferred_issue || payload['issue'],
+        repository: transferred_repository || payload['repository'],
+        refresh_metadata: metadata_action?
+      )
     when 'issue_comment'
       sync_subject(
         payload['issue'],
@@ -22,7 +31,7 @@ class HooksController < ApplicationController
         }
       )
     when 'pull_request'
-      sync_subject(payload['pull_request'])
+      sync_subject(payload['pull_request'], refresh_metadata: metadata_action?)
     when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'
       SyncReviewsWorker.perform_async_if_configured(payload['pull_request'])
     when 'label'
@@ -41,16 +50,16 @@ class HooksController < ApplicationController
     when 'github_app_authorization'
       SyncGithubAppAuthorizationWorker.perform_async_if_configured(payload['sender']['id'])
     when 'marketplace_purchase'
-      MarketplacePurchaseWorker.perform_async_if_configured(payload)  if ['purchased', 'cancelled', 'changed'].include?(payload['action'])
+      MarketplacePurchaseWorker.perform_async_if_configured(payload) if ['purchased', 'cancelled', 'changed'].include?(payload['action'])
     when 'status'
       SyncStatusWorker.perform_async_if_configured(payload['sha'], payload['name'])
     when 'repository'
       SyncRepositoryWorker.perform_async_if_configured(payload['repository'])
       refresh_repository_lifecycle_events if %w[publicized privatized].include?(payload['action'])
+      handle_repository_visibility_change
     end
 
-    # Outside the case so that other handlers for push, create or delete
-    # events cannot shadow the lifecycle refresh.
+    # Other push handlers must not shadow the lifecycle refresh.
     if REPOSITORY_LIFECYCLE_EVENTS.include?(event_header) && ref_event_relevant?
       refresh_repository_lifecycle_events(active_only: event_header == 'push')
     end
@@ -60,13 +69,18 @@ class HooksController < ApplicationController
 
   private
 
-  def sync_subject(remote_subject, extra_options = {})
-    Repository.sync(payload['repository']) if payload['repository']
+  def sync_subject(remote_subject, extra_options = {}, repository: payload['repository'], refresh_metadata: false)
+    Repository.sync(repository) if repository
+    private_repository = repository&.dig('private') == true
     options = extra_options.merge(
       'refresh_lifecycle' => lifecycle_action?,
-      'private_repository' => payload.dig('repository', 'private') == true
+      'refresh_metadata' => refresh_metadata,
+      'private_repository' => private_repository
     )
-    LifecycleEventSnapshot.purge_public_for_subject_url(remote_subject['url']) if options['private_repository']
+    if private_repository
+      LifecycleEventSnapshot.purge_public_for_subject_url(remote_subject['url'])
+      MetadataEventSnapshot.purge_public_for_subject_url(remote_subject['url'])
+    end
     SyncSubjectWorker.perform_async_if_configured(remote_subject, options)
   end
 
@@ -95,6 +109,39 @@ class HooksController < ApplicationController
     return payload['ref'].to_s.start_with?('refs/heads/') if event_header == 'push'
 
     payload['ref_type'] == 'branch'
+  end
+
+  def transferred_issue
+    issue = payload.dig('changes', 'new_issue')
+    issue if payload['action'] == 'transferred' && issue.is_a?(Hash)
+  end
+
+  def transferred_repository
+    repository = payload.dig('changes', 'new_repository')
+    repository if payload['action'] == 'transferred' && repository.is_a?(Hash)
+  end
+
+  def metadata_action?
+    return true if METADATA_ACTIONS.include?(payload['action'])
+
+    payload['action'] == 'edited' && payload.dig('changes', 'title').present?
+  end
+
+  def handle_repository_visibility_change
+    repository = payload['repository'] || {}
+    full_name = repository['full_name']
+    return if full_name.blank?
+
+    Repository.sync(repository)
+    case payload['action']
+    when 'privatized'
+      MetadataEventSnapshot.purge_public_for_repository(full_name)
+    when 'publicized'
+      MetadataEventSnapshot.joins(:subject)
+        .where(subjects: { repository_full_name: full_name })
+        .where.not(viewer_id: nil)
+        .destroy_all
+    end
   end
 
   HMAC_DIGEST = OpenSSL::Digest.new('sha1')

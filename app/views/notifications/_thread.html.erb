@@ -57,6 +57,11 @@
             </div>
           </div>
         <% end %>
+        <%= render 'notifications/metadata_events',
+                   metadata_events: @metadata_events,
+                   total_count: @metadata_event_total_count,
+                   snapshot: @metadata_event_snapshot if @metadata_event_snapshot %>
+
         <div class="notification-conversation">
           <%= render 'notifications/lifecycle_events',
                      snapshot: @lifecycle_event_snapshot if @lifecycle_event_snapshot %>

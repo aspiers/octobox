@@ -72,7 +72,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
   end
 
   create_table "lifecycle_event_snapshots", force: :cascade do |t|
-    t.integer "subject_id", null: false
+    t.bigint "subject_id", null: false
     t.integer "viewer_id"
     t.string "scope_key", null: false
     t.string "status", default: "stale", null: false
@@ -81,15 +81,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.datetime "refresh_started_at"
     t.datetime "refreshed_at"
     t.datetime "failed_at"
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["subject_id", "scope_key"], name: "index_lifecycle_event_snapshots_on_subject_id_and_scope_key", unique: true
     t.index ["subject_id"], name: "index_lifecycle_event_snapshots_on_subject_id"
     t.index ["viewer_id"], name: "index_lifecycle_event_snapshots_on_viewer_id"
   end
 
   create_table "lifecycle_events", force: :cascade do |t|
-    t.integer "lifecycle_event_snapshot_id", null: false
+    t.bigint "lifecycle_event_snapshot_id", null: false
     t.string "github_identity", null: false
     t.string "event_type", null: false
     t.string "actor_login"
@@ -102,11 +102,46 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.string "current_ref_name"
     t.text "commit_message"
     t.bigint "github_event_id"
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["lifecycle_event_snapshot_id", "github_identity"], name: "index_lifecycle_events_on_snapshot_and_identity", unique: true
     t.index ["lifecycle_event_snapshot_id", "occurred_at"], name: "index_lifecycle_events_on_snapshot_and_time"
     t.index ["lifecycle_event_snapshot_id"], name: "index_lifecycle_events_on_snapshot_id"
+  end
+
+  create_table "metadata_event_snapshots", force: :cascade do |t|
+    t.bigint "subject_id", null: false
+    t.integer "viewer_id"
+    t.string "scope_key", null: false
+    t.string "status", default: "stale", null: false
+    t.integer "generation", default: 0, null: false
+    t.integer "total_count", default: 0, null: false
+    t.datetime "refresh_started_at"
+    t.datetime "refreshed_at"
+    t.datetime "failed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["subject_id", "scope_key"], name: "index_metadata_event_snapshots_on_subject_id_and_scope_key", unique: true
+    t.index ["subject_id"], name: "index_metadata_event_snapshots_on_subject_id"
+    t.index ["viewer_id"], name: "index_metadata_event_snapshots_on_viewer_id"
+  end
+
+  create_table "metadata_events", force: :cascade do |t|
+    t.bigint "metadata_event_snapshot_id", null: false
+    t.string "github_identity", null: false
+    t.string "event_type", null: false
+    t.string "actor_login"
+    t.datetime "occurred_at", null: false
+    t.jsonb "before_metadata", default: {}, null: false
+    t.jsonb "after_metadata", default: {}, null: false
+    t.jsonb "source_context", default: {}, null: false
+    t.text "native_url"
+    t.bigint "github_event_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["metadata_event_snapshot_id", "github_identity"], name: "index_metadata_events_on_snapshot_and_identity", unique: true
+    t.index ["metadata_event_snapshot_id", "occurred_at"], name: "index_metadata_events_on_snapshot_and_time"
+    t.index ["metadata_event_snapshot_id"], name: "index_metadata_events_on_snapshot_id"
   end
 
   create_table "notifications", id: :serial, force: :cascade do |t|
@@ -232,4 +267,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
   add_foreign_key "lifecycle_event_snapshots", "subjects", on_delete: :cascade
   add_foreign_key "lifecycle_event_snapshots", "users", column: "viewer_id", on_delete: :cascade
   add_foreign_key "lifecycle_events", "lifecycle_event_snapshots", on_delete: :cascade
+  add_foreign_key "metadata_event_snapshots", "subjects", on_delete: :cascade
+  add_foreign_key "metadata_event_snapshots", "users", column: "viewer_id", on_delete: :cascade
+  add_foreign_key "metadata_events", "metadata_event_snapshots", on_delete: :cascade
 end

@@ -464,4 +464,33 @@ module NotificationsHelper
 
     event.github_event_id ? "#{subject_url}#event-#{event.github_event_id}" : subject_url
   end
+
+  def metadata_event_actor(event)
+    actor = event.actor_login.presence || 'Someone'
+    return actor unless actor.match?(/\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\z/)
+
+    link_to actor, "#{Octobox.config.github_domain}/#{actor}",
+            class: 'text-muted', target: '_blank', rel: 'noopener'
+  end
+
+  def metadata_event_safe_url(url)
+    uri = URI.parse(url.to_s)
+    github_uri = URI.parse(Octobox.config.github_domain)
+    return unless %w[http https].include?(uri.scheme)
+    return unless uri.scheme == github_uri.scheme && uri.host == github_uri.host &&
+                  uri.port == github_uri.port && uri.userinfo.nil?
+
+    uri.to_s
+  rescue URI::InvalidURIError
+    nil
+  end
+
+  def metadata_event_source_label(event)
+    source = event.source_context
+    repository = source['repository_full_name']
+    number = source['number']
+    return "#{repository}##{number}" if repository.present? && number.present?
+
+    source['title'].presence || 'another issue or pull request'
+  end
 end
