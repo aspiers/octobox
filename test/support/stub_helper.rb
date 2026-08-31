@@ -86,8 +86,20 @@ module StubHelper
       .to_return(status: 200, body: file_fixture('subject_58_status.json'), headers: headers)
   end
 
+  def stub_ci_activity_requests(extra_headers: {})
+    headers = { 'Content-Type' => 'application/json' }.merge(extra_headers)
+
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/statuses/[^?]+})
+      .to_return(status: 200, body: '[]', headers: headers)
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/commits/[^/]+/check-runs})
+      .to_return(status: 200, body: '{"total_count":0,"check_runs":[]}', headers: headers)
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/commits/[^/]+/check-suites})
+      .to_return(status: 200, body: '{"total_count":0,"check_suites":[]}', headers: headers)
+  end
+
   def stub_comments_requests(extra_headers: {})
     headers = {'Content-Type' => 'application/json'}.merge(extra_headers)
+    stub_ci_activity_requests(extra_headers: extra_headers)
 
     stub_request(:get, /\/comments\?per_page=100&since\z/)
       .to_return(status: 200, body: file_fixture('comments.json'), headers: headers)

@@ -1,0 +1,53 @@
+<section class="card ci-activity mt-3" aria-labelledby="ci-activity-heading">
+  <div class="card-header py-2 d-flex align-items-center justify-content-between">
+    <strong id="ci-activity-heading">CI activity</strong>
+    <span class="badge badge-light"><%= ci_activities.size %></span>
+  </div>
+
+  <div class="list-group list-group-flush">
+    <% ci_activities.each do |activity| %>
+      <div class="list-group-item ci-activity-item py-2" data-ci-outcome="<%= activity.outcome.dasherize %>">
+        <div class="d-flex align-items-start">
+          <span class="ci-activity-outcome <%= ci_activity_text_class(activity) %> mr-2" title="<%= activity.outcome_label %>">
+            <%= octicon ci_activity_icon(activity), height: 16 %>
+            <span><%= activity.outcome_label %></span>
+          </span>
+
+          <div class="ci-activity-details flex-grow-1">
+            <div>
+              <% if activity.safe_target_url %>
+                <%= link_to activity.name, activity.safe_target_url, target: "_blank", rel: "noopener noreferrer", class: "font-weight-bold" %>
+              <% else %>
+                <strong><%= activity.name %></strong>
+              <% end %>
+
+              <small class="text-muted ml-1">
+                <% if activity.app_name.present? %>
+                  <%= activity.app_name %>
+                <% else %>
+                  Commit status
+                <% end %>
+                <% if activity.check_suite_id.present? %>
+                  &middot; suite #<%= activity.check_suite_id %>
+                <% end %>
+              </small>
+            </div>
+
+            <% if activity.description.present? %>
+              <div class="small text-muted"><%= truncate(activity.description, length: 180) %></div>
+            <% end %>
+            <% if activity.summary.present? %>
+              <div class="small ci-activity-summary"><%= truncate(activity.summary, length: 240) %></div>
+            <% end %>
+          </div>
+
+          <% if activity.event_at %>
+            <time class="small text-muted ml-2 text-nowrap" datetime="<%= activity.event_at.iso8601 %>">
+              <%= time_ago_in_words(activity.event_at) %> ago
+            </time>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</section>

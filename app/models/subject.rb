@@ -3,6 +3,7 @@ class Subject < ApplicationRecord
   has_many :labels, dependent: :delete_all
   has_many :users, through: :notifications
   has_many :comments, dependent: :delete_all
+  has_many :ci_activities, dependent: :delete_all
   belongs_to :repository, foreign_key: :repository_full_name, primary_key: :full_name, optional: true
   has_one :app_installation, through: :repository
 
@@ -83,7 +84,7 @@ class Subject < ApplicationRecord
   end
 
   def self.sync_status(sha, repository_full_name)
-    where(repository_full_name: repository_full_name).find_by_sha(sha)&.update_status
+    where(repository_full_name: repository_full_name, sha: sha).find_each(&:update_status)
   end
 
   def self.sync_comments(remote_subject)
@@ -108,13 +109,7 @@ class Subject < ApplicationRecord
   end
 
   def update_status
-    if sha.present?
-      remote_status = download_status
-      if remote_status.present?
-        self.status = assign_status(remote_status)
-        self.save if changed?
-      end
-    end
+    SubjectCiSync.call(self, github_client)
   end
 
   def reaction_counts
@@ -183,26 +178,6 @@ class Subject < ApplicationRecord
 
   def pushable_fields
     ['state', 'status', 'body', 'comment_count', 'draft', 'reactions']
-  end
-
-  def assign_status(remote_status)
-    if remote_status.state == 'pending'
-      remote_status.statuses.present? ? remote_status.state : nil
-    else
-      remote_status.state
-    end
-  end
-
-  def download_status
-    return unless github_client
-    github_client.combined_status(repository_full_name, sha)
-  rescue Octokit::ClientError, Octokit::InternalServerError => error
-    GithubPreviewFetcher.log_failure(
-      error,
-      operation: 'combined_status',
-      subject_url: url
-    )
-    nil
   end
 
   #example https://api.github.com/repos/octobox/octobox/issues/1141/comments

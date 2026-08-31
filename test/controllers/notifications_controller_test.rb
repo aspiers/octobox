@@ -1156,6 +1156,88 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test 'thread view renders ordered CI activity with safe native links' do
+    sign_in_as(@user)
+    notification = create(
+      :notification,
+      user: @user,
+      subject_type: 'PullRequest',
+      subject_url: 'https://api.github.com/repos/octobox/octobox/pulls/123'
+    )
+    subject = create(:subject, url: notification.subject_url, comment_count: 0)
+    create(
+      :ci_activity,
+      subject: subject,
+      kind: 'check_run',
+      name: 'Older tests',
+      state: 'completed',
+      conclusion: 'success',
+      app_name: 'GitHub Actions',
+      completed_at: 2.hours.ago,
+      target_url: 'https://github.com/octobox/octobox/actions/runs/1'
+    )
+    create(
+      :ci_activity,
+      subject: subject,
+      kind: 'check_run',
+      name: 'Approval gate',
+      state: 'completed',
+      conclusion: 'action_required',
+      app_name: 'GitHub Actions',
+      summary: 'A maintainer must approve this run',
+      completed_at: 1.hour.ago,
+      target_url: 'https://github.com/octobox/octobox/actions/runs/2'
+    )
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_equal ['Approval gate', 'Older tests'], assigns(:ci_activities).map(&:name)
+    assert_select '.ci-activity-item', count: 2
+    assert_select '.ci-activity-item[data-ci-outcome="action-required"] a[href=?]',
+                  'https://github.com/octobox/octobox/actions/runs/2',
+                  text: 'Approval gate'
+    assert_includes response.body, 'A maintainer must approve this run'
+  end
+
+  test 'thread view renders unsafe CI targets as plain text' do
+    sign_in_as(@user)
+    notification = create(
+      :notification,
+      user: @user,
+      subject_type: 'PullRequest',
+      subject_url: 'https://api.github.com/repos/octobox/octobox/pulls/124'
+    )
+    subject = create(:subject, url: notification.subject_url, comment_count: 0)
+    create(:ci_activity, subject: subject, name: 'Unsafe check', target_url: 'javascript:alert(1)')
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_select '.ci-activity-item a', count: 0
+    assert_select '.ci-activity-item strong', text: 'Unsafe check'
+  end
+
+  test 'thread view hides CI activity when display? is false' do
+    sign_in_as(@user)
+    notification = create(
+      :notification,
+      user: @user,
+      subject_type: 'PullRequest',
+      subject_url: 'https://api.github.com/repos/octobox/octobox/pulls/125'
+    )
+    subject = create(:subject, url: notification.subject_url, comment_count: 0)
+    create(:ci_activity, subject: subject, name: 'secret private check')
+    Notification.any_instance.stubs(:display?).returns(false)
+
+    get notification_path(notification)
+
+    assert_response :success
+    refute_includes response.body, 'secret private check'
+    assert_select '.ci-activity', false
+    assert_empty assigns(:ci_activities)
+  end
+
   test 'thread view hides subject body when display? is false' do
     sign_in_as(@user)
     notification = create(:notification, user: @user)

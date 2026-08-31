@@ -5,6 +5,7 @@ class SubjectTest < ActiveSupport::TestCase
 
   setup do
     stub_include_comments
+    stub_ci_activity_requests
   end
 
   test 'update_labels creates a label when a matching one does not exist' do

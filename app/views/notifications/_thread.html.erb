@@ -57,6 +57,10 @@
             </div>
           </div>
         <% end %>
+        <% if @ci_activities.present? %>
+          <%= render partial: 'ci_activities', locals: { ci_activities: @ci_activities } %>
+        <% end %>
+
         <% if @notification.subject.commentable? %>
           <% if @comments_left_to_load > 0 %>
             <div id='more-comments'>
