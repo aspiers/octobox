@@ -3,6 +3,8 @@ class Subject < ApplicationRecord
   has_many :labels, dependent: :delete_all
   has_many :users, through: :notifications
   has_many :comments, dependent: :delete_all
+  has_many :lifecycle_event_snapshots, dependent: :delete_all
+  has_many :lifecycle_events, through: :lifecycle_event_snapshots
   belongs_to :repository, foreign_key: :repository_full_name, primary_key: :full_name, optional: true
   has_one :app_installation, through: :repository
 
@@ -105,6 +107,10 @@ class Subject < ApplicationRecord
 
   def pull_request?
     url.match?(/pull/i)
+  end
+
+  def issue_or_pull_request?
+    url.match?(%r{/issues/|/pulls/})
   end
 
   def update_status

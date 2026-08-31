@@ -23,6 +23,7 @@ class NotificationsController < ApplicationController
     @conversation_page = conversation_page(@notification, limit: 5)
     @comments_left_to_load = @conversation_page.remaining_count
 
+    load_lifecycle_events
     render partial: "notifications/thread", layout: false if request.xhr?
   end
 
@@ -34,6 +35,7 @@ class NotificationsController < ApplicationController
     @comments_left_to_load = 0
     @conversation_page = conversation_page(@notification)
 
+    load_lifecycle_events
     render 'notifications/show'
   end
 
@@ -112,6 +114,23 @@ class NotificationsController < ApplicationController
   def star
     @notification.update_columns starred: !@notification.starred?
     head :ok
+  end
+
+  def load_lifecycle_events
+    @lifecycle_events = []
+    @lifecycle_event_total_count = 0
+    return unless @notification.subject&.issue_or_pull_request? && @notification.display?
+
+    subject = @notification.subject
+    @lifecycle_event_snapshot = LifecycleEventSnapshot.for_presentation(subject, current_user)
+    unless @lifecycle_event_snapshot&.fresh?
+      viewer_id = subject.repository&.private? ? current_user.id : nil
+      RefreshLifecycleEventsWorker.perform_async_if_configured(subject.id, viewer_id)
+    end
+    return unless @lifecycle_event_snapshot
+
+    @lifecycle_events = @lifecycle_event_snapshot.lifecycle_events.latest_chronologically(50)
+    @lifecycle_event_total_count = @lifecycle_event_snapshot.total_count
   end
 
   def sync

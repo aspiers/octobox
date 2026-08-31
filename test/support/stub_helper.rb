@@ -97,6 +97,8 @@ module StubHelper
       .to_return(status: 200, body: '[]', headers: headers)
     stub_request(:get, /\/commits\/\w*\/status/)
       .to_return(status: 200, body: file_fixture('comments.json'), headers: headers)
+    stub_request(:get, %r{/issues/\d+/timeline})
+      .to_return(status: 200, body: '[]', headers: headers)
   end
 
   def empty_review_threads_response

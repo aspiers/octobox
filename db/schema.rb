@@ -10,10 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_01_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
-  enable_extension "plpgsql"
 
   create_table "app_installation_permissions", force: :cascade do |t|
     t.integer "app_installation_id"
@@ -69,6 +69,44 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_01_010000) do
     t.bigint "github_id"
     t.index ["name"], name: "index_labels_on_name"
     t.index ["subject_id"], name: "index_labels_on_subject_id"
+  end
+
+  create_table "lifecycle_event_snapshots", force: :cascade do |t|
+    t.integer "subject_id", null: false
+    t.integer "viewer_id"
+    t.string "scope_key", null: false
+    t.string "status", default: "stale", null: false
+    t.integer "generation", default: 0, null: false
+    t.integer "total_count", default: 0, null: false
+    t.datetime "refresh_started_at"
+    t.datetime "refreshed_at"
+    t.datetime "failed_at"
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["subject_id", "scope_key"], name: "index_lifecycle_event_snapshots_on_subject_id_and_scope_key", unique: true
+    t.index ["subject_id"], name: "index_lifecycle_event_snapshots_on_subject_id"
+    t.index ["viewer_id"], name: "index_lifecycle_event_snapshots_on_viewer_id"
+  end
+
+  create_table "lifecycle_events", force: :cascade do |t|
+    t.integer "lifecycle_event_snapshot_id", null: false
+    t.string "github_identity", null: false
+    t.string "event_type", null: false
+    t.string "actor_login"
+    t.datetime "occurred_at", null: false
+    t.string "commit_sha"
+    t.string "before_commit_sha"
+    t.string "after_commit_sha"
+    t.string "ref_name"
+    t.string "previous_ref_name"
+    t.string "current_ref_name"
+    t.text "commit_message"
+    t.bigint "github_event_id"
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["lifecycle_event_snapshot_id", "github_identity"], name: "index_lifecycle_events_on_snapshot_and_identity", unique: true
+    t.index ["lifecycle_event_snapshot_id", "occurred_at"], name: "index_lifecycle_events_on_snapshot_and_time"
+    t.index ["lifecycle_event_snapshot_id"], name: "index_lifecycle_events_on_snapshot_id"
   end
 
   create_table "notifications", id: :serial, force: :cascade do |t|
@@ -191,4 +229,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_01_010000) do
   end
 
   add_foreign_key "labels", "subjects", on_update: :cascade, on_delete: :cascade
+  add_foreign_key "lifecycle_event_snapshots", "subjects", on_delete: :cascade
+  add_foreign_key "lifecycle_event_snapshots", "users", column: "viewer_id", on_delete: :cascade
+  add_foreign_key "lifecycle_events", "lifecycle_event_snapshots", on_delete: :cascade
 end

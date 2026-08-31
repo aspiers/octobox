@@ -29,6 +29,9 @@ class User < ApplicationRecord
 
   scope :not_recently_synced, -> { where('users.last_synced_at < ?', 5.minutes.ago) }
   scope :with_access_token, -> { where.not(encrypted_access_token: nil) }
+  scope :with_github_token, -> {
+    where.not(encrypted_access_token: nil).or(where.not(encrypted_personal_access_token: nil))
+  }
   scope :active, -> { where('users.updated_at > ?', 1.month.ago) }
 
   after_create :create_default_pinned_searches
