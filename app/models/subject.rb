@@ -3,6 +3,7 @@ class Subject < ApplicationRecord
   has_many :labels, dependent: :delete_all
   has_many :users, through: :notifications
   has_many :comments, dependent: :delete_all
+  has_many :reference_activities, dependent: :delete_all
   belongs_to :repository, foreign_key: :repository_full_name, primary_key: :full_name, optional: true
   has_one :app_installation, through: :repository
 
@@ -68,6 +69,7 @@ class Subject < ApplicationRecord
     update_labels(remote_subject['labels']) if remote_subject['labels'].present?
     update_comments if Octobox.include_comments? && (has_comments? || pull_request?)
     update_status
+    update_reference_activities
     sync_involved_users if (saved_changes.keys & notifiable_fields).any?
   ensure
     @preferred_github_client = nil
@@ -111,6 +113,10 @@ class Subject < ApplicationRecord
         self.save if changed?
       end
     end
+  end
+
+  def update_reference_activities(client = github_client)
+    SubjectReferenceSync.call(self, client)
   end
 
   def author_url_path

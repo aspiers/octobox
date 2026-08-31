@@ -56,6 +56,13 @@
             </div>
           </div>
         <% end %>
+
+        <% if @reference_activities.present? %>
+          <%= render 'reference_activities',
+                     reference_activities: @reference_activities,
+                     reference_activity_count: @reference_activity_count %>
+        <% end %>
+
         <% if @notification.subject.commentable? %>
           <% if @comments_left_to_load > 0 %>
             <div id='more-comments'>

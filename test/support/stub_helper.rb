@@ -47,6 +47,8 @@ module StubHelper
       .to_return({ status: 200, body: file_fixture('subject_56.json'), headers: headers })
       stub_request(:get, 'https://api.github.com/repos/octobox/octobox/issues/57')
       .to_return({ status: 200, body: file_fixture('subject_57.json'), headers: headers })
+      stub_request(:get, %r{/repos/octobox/octobox/issues/\d+/timeline})
+      .to_return({ status: 200, body: '[]', headers: headers })
       stub_request(:get, 'https://api.github.com/repos/octobox/octobox/commits/6dcb09b5b57875f334f61aebed695e2e4193db5e')
       .to_return({ status: 200, body: file_fixture('commit_no_author.json'), headers: { 'Content-Type' => 'application/json' } })
     end
@@ -86,6 +88,8 @@ module StubHelper
 
     stub_request(:get, /\/comments\?since\z/)
       .to_return({ status: 200, body: file_fixture('comments.json'), headers: headers })
+    stub_request(:get, /\/(?:issues|pulls)\/\d+\/timeline\?page=1&per_page=100\z/)
+      .to_return({ status: 200, body: '[]', headers: headers })
     stub_request(:get, /\/reviews\?since\z/)
       .to_return({ status: 200, body: file_fixture('comments.json'), headers: headers })
     stub_request(:get, /\/commits\/\w*\/status/)

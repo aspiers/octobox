@@ -21,6 +21,7 @@ class NotificationsController < ApplicationController
     ids = scope.pluck(:id)
     position = ids.index(params[:id].to_i)
     @notification = current_user.notifications.find(params[:id])
+    load_reference_activities(@notification)
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
 
@@ -43,6 +44,7 @@ class NotificationsController < ApplicationController
     ids = scope.pluck(:id)
     position = ids.index(params[:id].to_i)
     @notification = current_user.notifications.find(params[:id])
+    load_reference_activities(@notification)
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
 
@@ -157,5 +159,18 @@ class NotificationsController < ApplicationController
     else
       render json: { error: Sidekiq::Status::get(current_user.sync_job_id, :exception) }, status: :ok
     end
+  end
+
+  private
+
+  def load_reference_activities(notification)
+    @reference_activities = []
+    @reference_activity_count = 0
+    return unless notification.display? && notification.subject
+    return if notification.private?
+
+    scope = notification.subject.reference_activities
+    @reference_activity_count = scope.count
+    @reference_activities = scope.recent_first.limit(50).to_a.reverse
   end
 end

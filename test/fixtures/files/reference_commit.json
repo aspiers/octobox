@@ -1,0 +1,9 @@
+{
+  "sha": "0123456789abcdef0123456789abcdef01234567",
+  "html_url": "https://github.com/example/source/commit/0123456789abcdef0123456789abcdef01234567",
+  "author": { "login": "bob" },
+  "commit": {
+    "author": { "name": "Bob Example", "date": "2026-08-28T11:59:00Z" },
+    "message": "Fix parser fallback\n\nReferences example/target#99 and explains why the fallback failed."
+  }
+}

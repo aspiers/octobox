@@ -1260,4 +1260,94 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     get notification_path(notification, q: 'label:bug sort:subject')
     assert_response :success
   end
+
+  test 'thread renders the latest 50 references chronologically with the total count' do
+    sign_in_as(@user)
+    repository = create(:repository, full_name: 'example/target', private: false)
+    notification = create(
+      :notification,
+      user: @user,
+      repository_full_name: repository.full_name,
+      subject_url: 'https://api.github.com/repos/example/target/issues/99'
+    )
+    subject = create(:subject, repository: repository, url: notification.subject_url, comment_count: 0)
+    activities = 52.times.map do |index|
+      create(
+        :reference_activity,
+        subject: subject,
+        source_title: "Reference #{index}",
+        occurred_at: Time.zone.parse('2026-08-01 00:00:00 UTC') + index.minutes
+      )
+    end
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_equal activities.drop(2), assigns(:reference_activities)
+    assert_equal 52, assigns(:reference_activity_count)
+    assert_select '.reference-activity-item', count: 50
+    assert_select '.reference-activities .badge', text: '52'
+    assert_includes response.body, 'Showing the latest 50 of 52'
+    assert_operator response.body.index('Reference 2'), :<, response.body.index('Reference 51')
+  end
+
+  test 'thread escapes reference context and never links an unsafe target' do
+    sign_in_as(@user)
+    repository = create(:repository, full_name: 'example/target', private: false)
+    notification = create(
+      :notification,
+      user: @user,
+      repository_full_name: repository.full_name,
+      subject_url: 'https://api.github.com/repos/example/target/issues/100'
+    )
+    subject = create(:subject, repository: repository, url: notification.subject_url, comment_count: 0)
+    activity = create(
+      :reference_activity,
+      subject: subject,
+      source_title: '<script>title</script>',
+      body_snippet: '<img src=x onerror=alert(1)>'
+    )
+    activity.update_column(:native_url, 'javascript:alert(1)')
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_includes response.body, '&lt;script&gt;title&lt;/script&gt;'
+    assert_includes response.body, '&lt;img src=x onerror=alert(1)&gt;'
+    refute_includes response.body, '<script>title</script>'
+    assert_select '.reference-activity-item a', count: 0
+  end
+
+  test 'thread withholds shared reference activity from private notifications across users' do
+    other_user = create(:user)
+    repository = create(:repository, full_name: 'example/private', private: true)
+    subject = create(
+      :subject,
+      repository: repository,
+      repository_full_name: repository.full_name,
+      url: 'https://api.github.com/repos/example/private/issues/101',
+      comment_count: 0
+    )
+    notification = create(
+      :notification,
+      user: @user,
+      repository_full_name: repository.full_name,
+      subject_url: subject.url
+    )
+    create(
+      :notification,
+      user: other_user,
+      repository_full_name: repository.full_name,
+      subject_url: subject.url
+    )
+    create(:reference_activity, subject: subject, source_title: 'private cross-user activity')
+    sign_in_as(@user)
+
+    get notification_path(notification)
+
+    assert_response :success
+    refute_includes response.body, 'private cross-user activity'
+    assert_select '.reference-activities', false
+    assert_empty assigns(:reference_activities)
+  end
 end

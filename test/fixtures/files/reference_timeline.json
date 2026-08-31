@@ -1,0 +1,63 @@
+[
+  {
+    "event": "cross-referenced",
+    "actor": { "login": "alice" },
+    "created_at": "2026-08-27T17:51:59Z",
+    "source": {
+      "type": "issue",
+      "issue": {
+        "id": 4101,
+        "node_id": "I_cross_reference_source",
+        "number": 41,
+        "title": "The parser calls the old endpoint",
+        "body": "This reproduces the bug from <script>alert('no')</script> with more context.",
+        "html_url": "https://github.com/example/source/issues/41",
+        "repository_url": "https://api.github.com/repos/example/source",
+        "repository": { "full_name": "example/source", "private": false },
+        "user": { "login": "alice" }
+      }
+    }
+  },
+  {
+    "id": 4202,
+    "node_id": "REF_commit_reference",
+    "event": "referenced",
+    "actor": { "login": "bob" },
+    "commit_id": "0123456789abcdef0123456789abcdef01234567",
+    "commit_url": "https://api.github.com/repos/example/source/commits/0123456789abcdef0123456789abcdef01234567",
+    "created_at": "2026-08-28T12:00:00Z"
+  },
+  {
+    "event": "mentioned",
+    "actor": { "login": "carol" },
+    "created_at": "2026-08-29T09:30:00Z",
+    "source": {
+      "type": "issue",
+      "issue": {
+        "id": 4303,
+        "node_id": "PR_mention_source",
+        "number": 43,
+        "title": "Use the fixed parser",
+        "body": "Mentions the target while explaining the replacement.",
+        "html_url": "https://github.com/example/source/pull/43",
+        "repository_url": "https://api.github.com/repos/example/source",
+        "repository": { "full_name": "example/source", "private": false },
+        "pull_request": { "url": "https://api.github.com/repos/example/source/pulls/43" },
+        "user": { "login": "carol" }
+      }
+    }
+  },
+  {
+    "id": 4404,
+    "event": "closed",
+    "actor": { "login": "maintainer" },
+    "created_at": "2026-08-30T10:00:00Z"
+  },
+  {
+    "id": 4505,
+    "event": "reviewed",
+    "state": "pending",
+    "body": "pending private review text",
+    "created_at": "2026-08-30T11:00:00Z"
+  }
+]

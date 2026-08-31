@@ -1,0 +1,12 @@
+{
+  "ref": "refs/heads/main",
+  "repository": {
+    "full_name": "example/source"
+  },
+  "commits": [
+    {
+      "id": "0123456789abcdef0123456789abcdef01234567",
+      "message": "Fix the parser\n\nReferences example/target#99 and #41."
+    }
+  ]
+}
