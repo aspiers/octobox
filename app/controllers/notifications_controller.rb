@@ -20,14 +20,8 @@ class NotificationsController < ApplicationController
 
     load_notification_navigation(scope)
 
-    if @notification.subject && @notification.subject.commentable?
-      comments_loaded = 5
-      @comments = @notification.subject.comments.order('created_at DESC').limit(comments_loaded).reverse
-      @comments_left_to_load = @notification.subject.comment_count - comments_loaded
-      @comments_left_to_load = 0 if @comments_left_to_load < 0
-    else
-      @comments = []
-    end
+    @conversation_page = conversation_page(@notification, limit: 5)
+    @comments_left_to_load = @conversation_page.remaining_count
 
     render partial: "notifications/thread", layout: false if request.xhr?
   end
@@ -38,15 +32,20 @@ class NotificationsController < ApplicationController
     load_notification_navigation(scope)
 
     @comments_left_to_load = 0
-
-    if @notification.subject
-      @comments = @notification.subject.comments.order('created_at ASC')
-    else
-      @comments = []
-    end
+    @conversation_page = conversation_page(@notification)
 
     render 'notifications/show'
   end
+
+  def conversation_page(notification, limit: nil)
+    if notification.display? && notification.subject&.commentable?
+      NotificationConversationPresenter.new(notification.subject).page(limit: limit)
+    else
+      NotificationConversationPresenter::Page.new(entries: [], remaining_count: 0, total_count: 0)
+    end
+  end
+
+  private :conversation_page
 
   def comment
     subject = current_user.notifications.find(params[:id]).subject

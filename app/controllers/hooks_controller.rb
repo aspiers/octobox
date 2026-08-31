@@ -9,7 +9,7 @@ class HooksController < ApplicationController
       SyncSubjectWorker.perform_async_if_configured(payload['issue'])
     when 'pull_request'
       SyncSubjectWorker.perform_async_if_configured(payload['pull_request'])
-    when 'pull_request_review', 'pull_request_review_comment'
+    when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'
       SyncReviewsWorker.perform_async_if_configured(payload['pull_request'])
     when 'label'
       SyncLabelWorker.perform_async_if_configured(payload) if payload['action'] == 'edited'

@@ -1,0 +1,25 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "nodes": [{
+            "id": "THREAD_301",
+            "isCollapsed": false,
+            "isOutdated": false,
+            "isResolved": false,
+            "path": "lib/example.rb",
+            "line": 10,
+            "originalLine": 9,
+            "startLine": 8,
+            "originalStartLine": 8,
+            "diffSide": "RIGHT",
+            "startDiffSide": "RIGHT",
+            "comments": {"nodes": [{"databaseId": 301, "id": "COMMENT_301"}]}
+          }],
+          "pageInfo": {"hasNextPage": true, "endCursor": "page-2"}
+        }
+      }
+    }
+  }
+}

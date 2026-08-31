@@ -1,12 +1,10 @@
 class CommentsChannel < ApplicationCable::Channel
 
   def subscribed
-    if current_user.nil?
-        reject
-    else
-      subject = current_user.notifications.find(params[:notification]).subject
-      stream_for subject
-    end
+    notification = current_user&.notifications&.find_by(id: params[:notification])
+    return reject unless notification&.display_thread? && notification.display?
+
+    stream_for notification.subject
   end
 
   def unsubscribed

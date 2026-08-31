@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_30_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -47,6 +47,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_30_000000) do
     t.datetime "updated_at", precision: nil, null: false
     t.string "review_state"
     t.string "url"
+    t.string "html_url"
+    t.string "activity_kind"
+    t.string "github_node_id"
+    t.bigint "review_github_id"
+    t.bigint "reply_to_github_id"
+    t.string "thread_github_node_id"
+    t.jsonb "review_context", default: {}, null: false
+    t.index ["subject_id", "activity_kind", "github_id"], name: "index_comments_on_subject_and_fallback_identity", unique: true, where: "((github_node_id IS NULL) AND (github_id IS NOT NULL) AND (activity_kind IS NOT NULL))"
+    t.index ["subject_id", "github_node_id"], name: "index_comments_on_subject_and_node_identity", unique: true, where: "(github_node_id IS NOT NULL)"
     t.index ["subject_id"], name: "index_comments_on_subject_id"
   end
 

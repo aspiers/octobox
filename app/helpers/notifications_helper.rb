@@ -317,12 +317,38 @@ module NotificationsHelper
 
   def comment_status(status)
     return unless status.present?
+    css_class = COMMENT_STATUS.fetch(status, 'secondary')
     content_tag(:span,
-      octicon(COMMENT_STATUS_OCTICON[status], height: 24, class: COMMENT_STATUS[status]),
-      class: "badge badge-light #{COMMENT_STATUS[status]}",
+      octicon(COMMENT_STATUS_OCTICON.fetch(status, 'dot-fill'), height: 24, class: css_class),
+      class: "badge badge-light #{css_class}",
       title: status.humanize,
       data: {toggle: 'tooltip'}
     )
+  end
+
+  def review_state_text(status)
+    {
+      'APPROVED' => 'approved these changes',
+      'CHANGES_REQUESTED' => 'requested changes',
+      'COMMENTED' => 'reviewed'
+    }.fetch(status, "submitted a #{status.to_s.humanize.downcase}")
+  end
+
+  def review_location(context)
+    path = context['path'] || 'Unknown file'
+    current_line = context['line']
+    original_line = context['original_line']
+    start_line = context['start_line'] || context['original_start_line']
+    line = current_line || original_line
+    return "#{path} (file comment)" unless line
+
+    range = start_line && start_line != line ? "#{start_line}-#{line}" : line.to_s
+    qualifier = current_line ? 'line' : 'original line'
+    "#{path} (#{qualifier} #{range})"
+  end
+
+  def safe_markdown(body)
+    sanitize(parse_markdown(body))
   end
 
   def sidebar_notification_status(status)

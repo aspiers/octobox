@@ -1,0 +1,6 @@
+<div class="review-conversation mt-3">
+  <%= render 'notifications/review_submission', review: review %>
+  <% threads.each do |thread| %>
+    <%= render 'notifications/review_thread', thread: thread %>
+  <% end %>
+</div>

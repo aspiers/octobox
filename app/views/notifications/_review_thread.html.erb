@@ -1,0 +1,28 @@
+<% root = thread.root %>
+<% context = root.review_context %>
+<div id="review-thread-<%= root.id %>" class="review-thread card mt-3">
+  <div class="card-header">
+    <code><%= review_location(context) %></code>
+    <span class="float-right">
+      <% if context.key?('resolved') %>
+        <span class="badge badge-<%= context['resolved'] ? 'success' : 'secondary' %>"><%= context['resolved'] ? 'Resolved' : 'Unresolved' %></span>
+      <% end %>
+      <% if context.key?('outdated') %>
+        <span class="badge badge-<%= context['outdated'] ? 'warning' : 'light' %>"><%= context['outdated'] ? 'Outdated' : 'Current' %></span>
+      <% end %>
+      <% if context.key?('collapsed') %>
+        <span class="badge badge-light"><%= context['collapsed'] ? 'Collapsed' : 'Expanded' %></span>
+      <% end %>
+    </span>
+  </div>
+  <% if context['diff_hunk'].present? %>
+    <pre class="mb-0 p-3 border-bottom"><code><%= context['diff_hunk'] %></code></pre>
+  <% end %>
+  <div class="card-body">
+    <%= render 'notifications/review_comment', comment: root, reply: false %>
+    <% thread.replies.each do |reply| %>
+      <hr>
+      <%= render 'notifications/review_comment', comment: reply, reply: true %>
+    <% end %>
+  </div>
+</div>

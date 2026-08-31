@@ -61,6 +61,22 @@ class HooksControllerTest < ActionController::TestCase
     assert_equal Subject.count, 1
   end
 
+  test 'pull_request_review_thread webhook refreshes review conversations' do
+    send_webhook 'pull_request_review_thread', 'pull_request_review_comment'
+    assert_equal Subject.count, 1
+  end
+
+  test 'deleted pull request review comment webhook triggers snapshot reconciliation' do
+    payload = Oj.load(File.read(Rails.root.join('test/fixtures/github_webhooks/pull_request_review_comment.json')))
+    payload['action'] = 'deleted'
+    SyncReviewsWorker.expects(:perform_async_if_configured).with(payload['pull_request']).once
+    @request.headers['X-GitHub-Event'] = 'pull_request_review_comment'
+
+    post :create, body: Oj.dump(payload)
+
+    assert_response :success
+  end
+
   test 'issue_comment webhook payload' do
     send_webhook 'issue_comment'
     assert_equal Subject.count, 1
