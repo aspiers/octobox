@@ -25,6 +25,7 @@ class NotificationsController < ApplicationController
     @comments_left_to_load = @conversation_page.remaining_count
 
     load_metadata_events
+    load_deployment_activity
     render partial: "notifications/thread", layout: false if request.xhr?
   end
 
@@ -38,6 +39,7 @@ class NotificationsController < ApplicationController
     @conversation_page = conversation_page(@notification)
 
     load_metadata_events
+    load_deployment_activity
     render 'notifications/show'
   end
 
@@ -188,5 +190,10 @@ class NotificationsController < ApplicationController
     @notification = current_user.notifications.find(params[:id])
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
+  end
+
+  def load_deployment_activity
+    @deployment_snapshot = DeploymentActivitySnapshot.for_notification(@notification, current_user)
+    @deployment_snapshot&.request_refresh!
   end
 end

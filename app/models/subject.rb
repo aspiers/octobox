@@ -7,6 +7,7 @@ class Subject < ApplicationRecord
   has_many :lifecycle_events, through: :lifecycle_event_snapshots
   has_many :metadata_event_snapshots, dependent: :delete_all
   has_many :metadata_events, through: :metadata_event_snapshots
+  has_many :deployment_activity_snapshots, dependent: :delete_all
   belongs_to :repository, foreign_key: :repository_full_name, primary_key: :full_name, optional: true
   has_one :app_installation, through: :repository
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_01_020000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -58,6 +58,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.index ["subject_id", "activity_kind", "github_id"], name: "index_comments_on_subject_and_fallback_identity", unique: true, where: "((github_node_id IS NULL) AND (github_id IS NOT NULL) AND (activity_kind IS NOT NULL))"
     t.index ["subject_id", "github_node_id"], name: "index_comments_on_subject_and_node_identity", unique: true, where: "(github_node_id IS NOT NULL)"
     t.index ["subject_id"], name: "index_comments_on_subject_id"
+  end
+
+  create_table "deployment_activity_snapshots", force: :cascade do |t|
+    t.bigint "subject_id", null: false
+    t.string "authorization_type", null: false
+    t.bigint "authorization_id"
+    t.jsonb "events", default: [], null: false
+    t.integer "total_count", default: 0, null: false
+    t.boolean "complete", default: false, null: false
+    t.bigint "generation", default: 0, null: false
+    t.datetime "fetched_at"
+    t.datetime "refresh_requested_at"
+    t.datetime "failed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["subject_id", "authorization_type", "authorization_id"], name: "index_deployment_snapshots_on_authorized_scope", unique: true, where: "(authorization_id IS NOT NULL)"
+    t.index ["subject_id", "authorization_type"], name: "index_deployment_snapshots_on_public_scope", unique: true, where: "(authorization_id IS NULL)"
+    t.index ["subject_id"], name: "index_deployment_activity_snapshots_on_subject_id"
+    t.check_constraint "authorization_type::text = 'public'::text AND authorization_id IS NULL OR (authorization_type::text = ANY (ARRAY['user'::character varying, 'installation'::character varying]::text[])) AND authorization_id IS NOT NULL", name: "deployment_snapshot_authorization_scope"
   end
 
   create_table "labels", force: :cascade do |t|
@@ -263,6 +282,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.index ["github_id"], name: "index_users_on_github_id", unique: true
   end
 
+  add_foreign_key "deployment_activity_snapshots", "subjects", on_delete: :cascade
   add_foreign_key "labels", "subjects", on_update: :cascade, on_delete: :cascade
   add_foreign_key "lifecycle_event_snapshots", "subjects", on_delete: :cascade
   add_foreign_key "lifecycle_event_snapshots", "users", column: "viewer_id", on_delete: :cascade

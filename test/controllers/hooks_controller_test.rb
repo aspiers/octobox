@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'test_helper'
 
 class HooksControllerTest < ActionController::TestCase
@@ -6,7 +7,7 @@ class HooksControllerTest < ActionController::TestCase
     repository = create(:repository, github_id: 139431141)
     notification = create(:notification, repository_full_name: repository.full_name)
     subject = create(:subject, repository: repository, url: notification.subject_url)
-    label = create(:label, subject: subject, name: ':carrot:')
+    create(:label, subject: subject, name: ':carrot:')
     Notification.any_instance.expects(:update_subject)
     send_webhook 'label'
   end
@@ -20,7 +21,7 @@ class HooksControllerTest < ActionController::TestCase
 
   test 'installation_repositories webhook payload' do
     stub_access_tokens_request
-    app = create(:app_installation, github_id: 293804)
+    create(:app_installation, github_id: 293804)
     send_webhook 'installation_repositories'
     assert_equal Repository.count, 1
   end
@@ -103,6 +104,20 @@ class HooksControllerTest < ActionController::TestCase
     post :create, body: Oj.dump(webhook_payload)
 
     assert_response :success
+  end
+
+  test 'deployment webhook queues a targeted commit refresh' do
+    RefreshDeploymentActivityForCommitWorker.expects(:perform_async_if_configured).
+      with('octobox/octobox', 'a10867b14bb761a232cd80139fbd4c0d33264240')
+
+    send_webhook 'deployment'
+  end
+
+  test 'deployment status webhook queues a targeted commit refresh' do
+    RefreshDeploymentActivityForCommitWorker.expects(:perform_async_if_configured).
+      with('octobox/octobox', 'a10867b14bb761a232cd80139fbd4c0d33264240')
+
+    send_webhook 'deployment_status'
   end
 
   test 'status webhook payload' do

@@ -53,6 +53,12 @@ class HooksController < ApplicationController
       MarketplacePurchaseWorker.perform_async_if_configured(payload) if ['purchased', 'cancelled', 'changed'].include?(payload['action'])
     when 'status'
       SyncStatusWorker.perform_async_if_configured(payload['sha'], payload['name'])
+    when 'deployment', 'deployment_status'
+      deployment = payload['deployment'] || {}
+      RefreshDeploymentActivityForCommitWorker.perform_async_if_configured(
+        payload.dig('repository', 'full_name'),
+        deployment['sha'] || deployment['ref']
+      )
     when 'repository'
       SyncRepositoryWorker.perform_async_if_configured(payload['repository'])
       refresh_repository_lifecycle_events if %w[publicized privatized].include?(payload['action'])

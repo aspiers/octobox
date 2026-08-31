@@ -1270,6 +1270,73 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'pull request preview queues deployment refresh without fetching from GitHub' do
+    sign_in_as(@user)
+    repository = create(:repository, full_name: 'octobox/deployment-preview', private: false)
+    subject = create(:subject,
+                     repository: repository,
+                     url: 'https://api.github.com/repos/octobox/deployment-preview/pulls/42',
+                     sha: 'a10867b14bb761a232cd80139fbd4c0d33264240')
+    notification = create(:notification,
+                          user: @user,
+                          subject_url: subject.url,
+                          repository_full_name: repository.full_name,
+                          subject_type: 'PullRequest')
+    DeploymentActivityFetcher.any_instance.expects(:call).never
+    stub_background_jobs_enabled
+
+    get notification_path(notification)
+
+    assert_response :success
+    snapshot = assigns(:deployment_snapshot)
+    assert_equal 'public', snapshot.authorization_type
+    assert_sidekiq_job_enqueued(RefreshDeploymentActivityWorker, snapshot.id, 1)
+  end
+
+  test 'pull request preview shows the latest 50 deployment events and escapes payload content' do
+    sign_in_as(@user)
+    repository = create(:repository, full_name: 'octobox/deployment-render', private: false)
+    subject = create(:subject,
+                     repository: repository,
+                     url: 'https://api.github.com/repos/octobox/deployment-render/pulls/42',
+                     sha: 'a10867b14bb761a232cd80139fbd4c0d33264240')
+    notification = create(:notification,
+                          user: @user,
+                          subject_url: subject.url,
+                          repository_full_name: repository.full_name,
+                          subject_type: 'PullRequest')
+    events = 50.times.map do |index|
+      {
+        'id' => "timeline:#{index}",
+        'kind' => 'deployed',
+        'environment' => index.zero? ? '<script>alert(1)</script>' : "preview-#{index}",
+        'outcome' => 'success',
+        'occurred_at' => '2026-08-31T09:00:00Z',
+        'actor_login' => '<img src=x onerror=alert(1)>'
+      }
+    end
+    DeploymentActivitySnapshot.create!(subject: subject,
+                                       authorization_type: 'public',
+                                       events: events,
+                                       total_count: 80,
+                                       complete: true,
+                                       fetched_at: Time.current)
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_select '.deployment-activity-event', count: 50
+    assert_select '.deployment-activity .card-header', text: /Showing latest 50 of 80/
+
+    get expand_comments_notification_path(notification)
+
+    assert_response :success
+    assert_select '.deployment-activity-event', count: 50
+    assert_includes response.body, '&lt;script&gt;alert(1)&lt;/script&gt;'
+    refute_includes response.body, '<script>alert(1)</script>'
+    refute_includes response.body, '<img src=x onerror=alert(1)>'
+  end
+
   test 'show with a label filter does not raise on pluck' do
     sign_in_as(@user)
     notification = create(:notification, user: @user)
