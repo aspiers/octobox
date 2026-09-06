@@ -1169,6 +1169,27 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '.discussion-thread', false
   end
 
+  test 'thread view initially expands comments with collapse chevrons' do
+    sign_in_as(@user)
+    notification = create(:notification, user: @user, last_read_at: 1.day.from_now.to_s)
+    subject = create(:subject, url: notification.subject_url, comment_count: 2)
+    create_list(:comment, 2, subject: subject)
+
+    get notification_path(notification)
+
+    assert_response :success
+    assert_select '.card-comment', count: 2 do
+      assert_select '.card-header.collapsed', count: 0
+      assert_select '.card-header[aria-expanded="true"]', count: 2
+      assert_select '.card-header .comment-collapse-chevron', count: 2
+      assert_select '.card-body.collapse.show', count: 2
+    end
+
+    css = Rails.application.assets.find_asset('light.css').to_s
+    assert_match(/\.card-comment \.comment-collapse-chevron\s*\{[^}]*transform:\s*rotate\(90deg\)/m, css)
+    assert_match(/\.card-comment \.card-header\.collapsed \.comment-collapse-chevron\s*\{[^}]*transform:\s*rotate\(0\)/m, css)
+  end
+
   test 'thread view shows subject body when display? is true' do
     sign_in_as(@user)
     notification = create(:notification, user: @user)

@@ -1,13 +1,14 @@
 <div id="comment-<%= comment.id %>" class="card-comment card mt-3">
-  <div class="card-header media d-flex align-items-center text-muted">
+  <div class="card-header clickable media d-flex align-items-center text-muted" data-toggle="collapse" data-target=".comment-<%= comment.id %>" aria-expanded="true" aria-controls="comment-<%= comment.id %>">
     <%= image_tag(avatar_url(comment.author), width: 20, class: 'mr-3 align-self-center', alt: '') %>
     <div class="media-body">
       <b><%= link_to comment.author, Octobox.config.github_domain + '/' + comment.author_url_path, class: 'text-muted', target: '_blank', rel: 'noopener' %></b>
       commented <%= time_ago_in_words(comment.created_at) %> ago
       <%= link_to 'View on GitHub', comment.web_url, class: 'float-right', target: '_blank', rel: 'noopener' %>
     </div>
+    <%= octicon 'chevron-right', height: 16, class: 'comment-collapse-chevron ml-3 flex-shrink-0' %>
   </div>
-  <div class="card-body markdown-body">
+  <div class="comment-<%= comment.id %> card-body collapse show markdown-body">
     <% if comment.body.present? %>
       <%= safe_markdown(comment.body) %>
     <% else %>
