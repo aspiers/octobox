@@ -173,9 +173,9 @@ module NotificationsHelper
     subject_type = notification.subject_type
     state = notification.user.try(:github_app_authorized?) ? notification.state : nil
     return 'issue-closed' if subject_type == 'Issue' && state == 'closed'
-    return 'git-pull-request-draft' if subject_type == 'PullRequest' && notification.draft?
     return 'git-merge' if subject_type == 'PullRequest' && state == 'merged'
     return 'git-pull-request-closed' if subject_type == 'PullRequest' && state == 'closed'
+    return 'git-pull-request-draft' if subject_type == 'PullRequest' && notification.draft?
     subject_type_icon(subject_type)
   end
 
@@ -184,20 +184,24 @@ module NotificationsHelper
   end
 
   def notification_icon_title(notification)
-    return "Draft #{notification.subject_type.underscore.humanize.downcase}" if notification.draft?
-    return notification.subject_type.underscore.humanize if notification.state.blank?
-    "#{notification.state.underscore.humanize} #{notification.subject_type.underscore.humanize.downcase}"
+    state = notification.state
+    subject_title = notification.subject_type.underscore.humanize
+    return "#{state.underscore.humanize} #{subject_title.downcase}" if %w[closed merged].include?(state)
+    return "Draft #{subject_title.downcase}" if notification.draft?
+    return subject_title if state.blank?
+
+    "#{state.underscore.humanize} #{subject_title.downcase}"
   end
 
   def notification_icon_color(notification)
     return unless notification.display_subject?
+
+    state = notification.state
+    return 'text-subscribed' if state == 'closed' && notification.subject_type == 'Issue'
+    return 'text-danger' if state == 'closed'
+    return 'text-subscribed' if state == 'merged'
     return 'text-draft' if notification.draft?
-    return 'text-subscribed' if notification.state == 'closed' && notification.subject_type == 'Issue'
-    {
-      'open' => 'text-success',
-      'closed' => 'text-danger',
-      'merged' => 'text-subscribed'
-    }[notification.state]
+    return 'text-success' if state == 'open'
   end
 
   def reason_label(reason)
@@ -347,19 +351,26 @@ module NotificationsHelper
   end
 
   def notification_button_title(notification)
+    state = notification.state
+    return state.underscore.humanize if %w[closed merged].include?(state)
     return 'Draft' if notification.draft?
-    return notification.subject_type.underscore.humanize if notification.state.blank?
-    notification.state.underscore.humanize
+    return notification.subject_type.underscore.humanize if state.blank?
+
+    state.underscore.humanize
   end
 
   def notification_button_color(notification)
     return unless notification.display_subject?
+
+    state = notification.state
+    return 'btn-closed-pr' if notification.subject_type == 'PullRequest' && state == 'closed'
+    return 'btn-merged' if state == 'merged'
     return 'btn-draft' if notification.draft?
+
     {
-      'open' => 'btn-success',
-      'closed' => 'btn-danger',
-      'merged' => 'btn-merged'
-    }[notification.state]
+      'open' => 'btn-open',
+      'closed' => 'btn-closed'
+    }[state]
   end
 
   def parse_markdown(str)

@@ -37,6 +37,14 @@ $danger:        $red !default;
 $light:         $gray-800 !default;
 $dark:          $gray-500 !default;
 
+// GitHub Primer dark status emphasis colors.
+$notification-open: #238636;
+$notification-closed: #8957e5;
+$notification-closed-pr: #da3633;
+$notification-failure: #da3633;
+$notification-merged: #8957e5;
+$notification-draft: #656c76;
+
 $yiq-contrasted-threshold:  175 !default;
 
 // Body

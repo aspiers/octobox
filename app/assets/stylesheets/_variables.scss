@@ -1,15 +1,19 @@
 $sidebar-width: 250px;
 $header-height: 63px;
 
-$notification-open: #5cb85c !default;
-$notification-closed: #d9534f !default;
-$notification-merged: #a128ca !default;
+// GitHub Primer status emphasis colors.
+$notification-open: #1f883d !default;
+$notification-closed: #8250df !default;
+$notification-closed-pr: #cf222e !default;
+$notification-failure: #cf222e !default;
+$notification-merged: #8250df !default;
 $notification-pending: #dbab09 !default;
-$notification-draft: #888 !default;
+$notification-draft: #59636e !default;
 
 $notification-colors: (
 	"open": $notification-open,
 	"closed": $notification-closed,
+	"closed-pr": $notification-closed-pr,
 	"merged": $notification-merged,
 	"pending": $notification-pending,
 	"draft": $notification-draft,
