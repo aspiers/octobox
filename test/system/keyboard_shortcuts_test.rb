@@ -23,6 +23,62 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     refute_equal initial_row[:id], new_current[:id]
   end
 
+  test 'shift-j and shift-k navigate preview entries and shift-enter toggles comments' do
+    stub_include_comments
+    @user.update!(display_comments: true)
+    subject = create(:subject, body: 'Description', comment_count: 2)
+    @notification1.update!(subject_url: subject.url)
+    comment = create(:comment, subject: subject, created_at: 2.minutes.ago)
+    create(:comment, subject: subject, created_at: 1.minute.ago)
+    visit '/'
+
+    find("#notification-#{@notification1.id} .thread-link").click
+    assert_selector '#notification-thread', wait: 2
+    page.execute_script(<<~JS)
+      var section = document.createElement('section');
+      var list = document.createElement('ol');
+      var activity = document.createElement('li');
+      activity.id = 'preview-activity';
+      activity.textContent = 'Activity';
+      list.appendChild(activity);
+      section.appendChild(list);
+
+      var reference = document.createElement('div');
+      reference.id = 'reference-activity';
+      reference.className = 'list-group-item';
+      reference.textContent = 'Reference';
+      section.appendChild(reference);
+
+      var review = document.createElement('div');
+      review.id = 'review-activity';
+      review.className = 'review-activity card';
+      review.textContent = 'Review';
+
+      var discussion = document.querySelector('.discussion-thread');
+      var comment = document.getElementById('comment-#{comment.id}');
+      discussion.insertBefore(section, comment);
+      discussion.insertBefore(review, comment);
+    JS
+
+    entry_ids = ['', 'preview-activity', 'reference-activity', 'review-activity', "comment-#{comment.id}"]
+    entry_ids.each do |entry_id|
+      send_keys :shift, 'j'
+      assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+    end
+
+    body_selector = ".comment-#{comment.id}.card-body"
+    assert_selector "#{body_selector}.show", visible: :all
+    send_keys :shift, :enter
+    assert_selector "#{body_selector}.collapse:not(.show)", visible: :all, wait: 2
+    send_keys :shift, :enter
+    assert_selector "#{body_selector}.show", visible: :all, wait: 2
+
+    entry_ids.reverse.drop(1).each do |entry_id|
+      send_keys :shift, 'k'
+      assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+    end
+  end
+
   test 'k moves cursor up the list' do
     send_keys 'j'
     sleep 0.1
@@ -41,6 +97,8 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :shift, '/'
     assert_selector '#help-box.show', wait: 2
     assert_text 'Keyboard shortcuts'
+    assert_text 'Move down/up through preview entries'
+    assert_text 'Expand/collapse the current preview entry'
   end
 
   test 'escape closes help modal' do
