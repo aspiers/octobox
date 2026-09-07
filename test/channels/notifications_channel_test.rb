@@ -26,4 +26,30 @@ class NotificationsChannelTest < ActionCable::Channel::TestCase
     end
   end
 
+
+  test "announces a newly created notification" do
+    user = create(:user)
+
+    stub_connection current_user: user
+    subscribe
+    assert_has_stream "notifications:#{user.id}"
+
+    assert_broadcasts("notifications:#{user.id}", 1) do
+      create(:notification, user: user)
+    end
+  end
+
+  test "an arrival announcement carries no rendered row" do
+    user = create(:user)
+    stub_connection current_user: user
+    subscribe
+
+    create(:notification, user: user)
+
+    payload = ActiveSupport::JSON.decode(broadcasts("notifications:#{user.id}").last)
+    assert payload["arrived"], "arrival must be marked so the client can tell it apart"
+    assert_nil payload["notification"],
+               "the list is filtered and paginated server-side, so a row must not be pushed"
+  end
+
 end

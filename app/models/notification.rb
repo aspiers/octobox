@@ -30,6 +30,7 @@ class Notification < ApplicationRecord
   validates :archived, inclusion: [true, false]
 
   after_update :push_if_changed
+  after_create :push_arrival
   after_destroy :clean_up_subject
 
   class << self
@@ -217,6 +218,16 @@ class Notification < ApplicationRecord
     notification = ApplicationController.render(partial: 'notifications/notification', locals: { notification: self})
     subject = ApplicationController.render(partial: 'notifications/thread_subject', locals: { notification: self})
     ActionCable.server.broadcast "notifications:#{user_id}", { id: self.id, notification: notification, subject: subject }
+  end
+
+  # Announce the arrival rather than pushing a rendered row. The list is
+  # filtered, sorted and paginated server-side, so the client cannot tell
+  # whether a new notification belongs on the page being viewed: inserting it
+  # would show rows that contradict the active filters and leave the pagination
+  # counts stale. Sending only a marker lets the client offer a refresh and
+  # keeps the server the authority on what the list contains.
+  def push_arrival
+    ActionCable.server.broadcast "notifications:#{user_id}", { arrived: true }
   end
 
   def update_repository(api_response)
