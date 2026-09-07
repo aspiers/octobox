@@ -42,6 +42,12 @@
     <% end %>
   </div>
 
+  <div class='js-new-notifications alert alert-info py-2 px-3 mb-0 d-none' role='status'>
+    <a href='#' class='js-new-notifications-refresh'>
+      <span class='js-new-notifications-count'></span>
+    </a>
+  </div>
+
   <table class='table table-hover table-notifications js-table-notifications mb-0 <%= 'filtered' if any_active_filters? %>' data-refresh-interval=<%= current_user.effective_refresh_interval %>>
     <% if @notifications.to_a.any? %>
       <%= render partial: 'notification', collection: @notifications %>
