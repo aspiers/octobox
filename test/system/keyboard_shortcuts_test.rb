@@ -29,7 +29,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     subject = create(:subject, body: 'Description', comment_count: 2)
     @notification1.update!(subject_url: subject.url)
     comment = create(:comment, subject: subject, created_at: 2.minutes.ago)
-    create(:comment, subject: subject, created_at: 1.minute.ago)
+    next_comment = create(:comment, subject: subject, created_at: 1.minute.ago)
     visit '/'
 
     find("#notification-#{@notification1.id} .thread-link").click
@@ -56,17 +56,21 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
       var discussion = document.querySelector('.discussion-thread');
       var comment = document.getElementById('comment-#{comment.id}');
+      comment.style.minHeight = '2000px';
       discussion.insertBefore(section, comment);
       discussion.insertBefore(review, comment);
     JS
 
-    entry_ids = ['', 'preview-activity', 'reference-activity', 'review-activity', "comment-#{comment.id}"]
+    entry_ids = ['', 'preview-activity', 'reference-activity', 'review-activity', "comment-#{comment.id}", "comment-#{next_comment.id}"]
     entry_ids.each do |entry_id|
+      position_preview_entry_partially_below(entry_id) if entry_id == "comment-#{next_comment.id}"
       send_keys :shift, 'j'
       assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+      assert_preview_entry_top_visible(entry_id) if entry_id == "comment-#{comment.id}"
+      assert_preview_entry_bottom_visible(entry_id) if entry_id == "comment-#{next_comment.id}"
     end
 
-    body_selector = ".comment-#{comment.id}.card-body"
+    body_selector = ".comment-#{next_comment.id}.card-body"
     assert_selector "#{body_selector}.show", visible: :all
     send_keys :shift, :enter
     assert_selector "#{body_selector}.collapse:not(.show)", visible: :all, wait: 2
@@ -76,6 +80,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     entry_ids.reverse.drop(1).each do |entry_id|
       send_keys :shift, 'k'
       assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+      assert_preview_entry_top_visible(entry_id) if entry_id == "comment-#{comment.id}"
     end
   end
 
@@ -263,6 +268,38 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
   def set_preview_scroll_top(value)
     page.execute_script("document.getElementById('thread').scrollTop = #{value}")
+  end
+
+  def position_preview_entry_partially_below(entry_id)
+    page.execute_script(<<~JS)
+      var preview = document.getElementById('thread');
+      var entry = document.getElementById('#{entry_id}');
+      preview.scrollTop += entry.getBoundingClientRect().top - preview.getBoundingClientRect().bottom + 10;
+    JS
+  end
+
+  def assert_preview_entry_bottom_visible(entry_id)
+    geometry = page.evaluate_script(<<~JS)
+      (() => {
+        var preview = document.getElementById('thread').getBoundingClientRect();
+        var entry = document.getElementById('#{entry_id}').getBoundingClientRect();
+        return { previewBottom: preview.bottom, entryBottom: entry.bottom };
+      })()
+    JS
+    assert_operator geometry['entryBottom'], :<=, geometry['previewBottom'] + 1, geometry.inspect
+  end
+
+  def assert_preview_entry_top_visible(entry_id)
+    geometry = page.evaluate_script(<<~JS)
+      (() => {
+        var preview = document.getElementById('thread').getBoundingClientRect();
+        var stickyHeader = document.querySelector('#thread .card-thread > .card-header.sticky-top').getBoundingClientRect();
+        var entry = document.getElementById('#{entry_id}').getBoundingClientRect();
+        return { visibleTop: stickyHeader.bottom, previewBottom: preview.bottom, entryTop: entry.top };
+      })()
+    JS
+    assert_operator geometry['entryTop'], :>=, geometry['visibleTop'], geometry.inspect
+    assert_operator geometry['entryTop'], :<, geometry['previewBottom']
   end
 
   def send_keys(*keys)

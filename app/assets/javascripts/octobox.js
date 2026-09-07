@@ -954,6 +954,17 @@ var Octobox = (function() {
     return Array.from(entries).filter(function(entry) { return entry.offsetParent !== null; });
   };
 
+  var ensurePreviewEntryTopVisible = function(entry) {
+    var previewRect = DOM.thread.getBoundingClientRect();
+    var stickyHeader = DOM.thread.querySelector(".card-thread > .card-header.sticky-top");
+    var visibleTop = stickyHeader ? stickyHeader.getBoundingClientRect().bottom : previewRect.top + DOM.thread.clientTop;
+    var visibleBottom = previewRect.top + DOM.thread.clientTop + DOM.thread.clientHeight;
+    var entryTop = entry.getBoundingClientRect().top;
+    if (entryTop < visibleTop || entryTop >= visibleBottom) {
+      DOM.thread.scrollTop += entryTop - visibleTop;
+    }
+  };
+
   var movePreviewEntry = function(e, direction) {
     var entries = getPreviewEntries();
     if (!entries.length) return;
@@ -971,6 +982,7 @@ var Octobox = (function() {
     target.setAttribute("tabindex", "-1");
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: "nearest" });
+    ensurePreviewEntryTopVisible(target);
   };
 
   var togglePreviewEntry = function(e) {
