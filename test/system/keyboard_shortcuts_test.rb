@@ -308,10 +308,13 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
         return new Promise(function(resolve, reject) {
           window.releaseArchiveRequest = function() {
-            originalFetch(url, options).then(function(response) {
-              document.body.dataset.archiveRequestFinished = 'true';
+            return originalFetch(url, options).then(function(response) {
               resolve(response);
-            }, reject);
+              return response.status;
+            }, function(error) {
+              reject(error);
+              throw error;
+            });
           };
         });
       };
@@ -320,8 +323,15 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys 'e'
     page.execute_script("Turbolinks.visit('/settings')")
     assert_current_path '/settings', wait: 2
-    page.execute_script('window.releaseArchiveRequest()')
-    assert_selector "body[data-archive-request-finished='true']", visible: :all, wait: 2
+    archive_result = page.evaluate_async_script(<<~JS)
+      var done = arguments[0];
+      window.releaseArchiveRequest().then(function(status) {
+        done({ status: status });
+      }, function(error) {
+        done({ error: error.toString() });
+      });
+    JS
+    assert_equal 200, archive_result['status'], archive_result['error']
     assert_current_path '/settings'
 
     page.execute_script("Turbolinks.visit('/')")
