@@ -10,6 +10,7 @@ var Octobox = (function() {
     get helpBox() { return document.getElementById("help-box"); },
     get syncIcon() { return document.querySelector(".js-sync .octicon"); }
   };
+  var threadRequestSequence = 0;
 
   var getCsrfToken = function() {
     var meta = document.querySelector('meta[name="csrf-token"]');
@@ -57,16 +58,6 @@ var Octobox = (function() {
       updatePinnedSearchCounts(element);
     });
   }
-
-  var moveCursorToClickedRow = function(event) {
-    // Don't event.preventDefault(), since we want the
-    // normal clicking behavior for links, starring, etc
-    var oldCurrent = getCurrentRow();
-    var target = event.target;
-
-    setRowCurrent(oldCurrent, false);
-    setRowCurrent(target, true);
-  };
 
   var updateFavicon = function () {
     fetch("/notifications/unread_count")
@@ -412,6 +403,16 @@ var Octobox = (function() {
 
   var recoverPreviousCursorPosition = function() {
     var rows = document.querySelectorAll(".js-table-notifications tr");
+    var displayedThread = DOM.notificationThread;
+    if (displayedThread) {
+      var displayedRow = document.querySelector("#notification-" + displayedThread.dataset.id);
+      if (displayedRow) {
+        row_index = Array.from(displayedRow.parentNode.children).indexOf(displayedRow) + 1;
+        markRowCurrent(displayedRow, false);
+      }
+      return;
+    }
+
     if ( current_id === undefined ) {
       row_index = Math.min(row_index, rows.length);
       row_index = Math.max(row_index, 1);
@@ -423,18 +424,17 @@ var Octobox = (function() {
       current_id = undefined;
     }
     var targetRow = document.querySelector(".js-table-notifications tbody tr:nth-child(" + row_index + ")");
-    if (targetRow) {
-      var td = targetRow.querySelector("td");
-      if (td) td.classList.add("current", "js-current");
-    }
+    if (targetRow) markRowCurrent(targetRow);
   }
 
-  var markRowCurrent = function(row) {
-    // Clicking a row marks it current
+  var markRowCurrent = function(row, preview) {
+    if (!row) return;
+
     var existing = document.querySelector(".current.js-current");
     if (existing) existing.classList.remove("current", "js-current");
     var td = row.querySelector("td");
     if (td) td.classList.add("current", "js-current");
+    if (preview !== false) previewRow(row);
   };
 
   var initShiftClickCheckboxes = function() {
@@ -684,18 +684,7 @@ var Octobox = (function() {
     if(document.querySelector(".js-initial_sync")){ sync() }
 
     window.onpopstate = function(event) {
-      if(event.state && event.state.thread){
-        var thread = document.getElementById('thread');
-        var loading = document.getElementById('loading');
-        if (thread && loading) thread.innerHTML = loading.innerHTML;
-
-        fetch(event.state.thread, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-          .then(response => response.text())
-          .then(data => {
-            var thread = document.getElementById('thread');
-            if (thread) thread.innerHTML = data;
-          });
-      }
+      if(event.state && event.state.thread) loadThread(event.state.thread, "none");
     };
   };
 
@@ -740,14 +729,23 @@ var Octobox = (function() {
     }
   } ;
 
-  var viewThread = function(e) {
-    e.preventDefault();
-    var link = e.target.closest('.thread-link');
-    if (!link) return;
-    var href = link.getAttribute('href');
+  var previewRow = function(row) {
+    var thread = document.querySelector("#thread");
+    if (!thread || window.getComputedStyle(thread).display === "none") return false;
 
-    history.pushState({thread: href}, 'Octobox', href);
+    var link = row.querySelector("td.notification-subject .thread-link");
+    if (!link) return false;
+    return loadThread(link.getAttribute("href"), "replace");
+  };
 
+  var loadThread = function(href, historyAction) {
+    if (historyAction === "replace") {
+      history.replaceState({thread: href}, 'Octobox', href);
+    } else if (historyAction !== "none") {
+      history.pushState({thread: href}, 'Octobox', href);
+    }
+
+    var requestSequence = ++threadRequestSequence;
     var thread = document.getElementById('thread');
     var loading = document.getElementById('loading');
     if (thread && loading) thread.innerHTML = loading.innerHTML;
@@ -758,11 +756,13 @@ var Octobox = (function() {
         return contentType.includes('json') ? response.json() : response.text();
       })
       .then(data => {
+        if (requestSequence !== threadRequestSequence) return;
         if (typeof data === 'object' && data.error) {
           notify(data.error, "danger");
         } else {
           var thread = document.getElementById('thread');
           if (thread) thread.innerHTML = data;
+          subscribeToComments();
         }
       });
 
@@ -772,8 +772,14 @@ var Octobox = (function() {
     if (flexMain) flexMain.classList.add("show-thread");
     var flexContent = document.querySelector(".flex-content");
     if (flexContent) flexContent.classList.remove("active");
-    subscribeToComments();
     return false;
+  }
+
+  var viewThread = function(e) {
+    e.preventDefault();
+    var link = e.target.closest('.thread-link');
+    if (!link) return;
+    return loadThread(link.getAttribute('href'));
   }
 
   var expandComments = function(e) {
@@ -951,10 +957,10 @@ var Octobox = (function() {
   };
 
   var autoSync = function() {
-    hasMarkedRows() || sync()
+    if (!hasMarkedRows()) sync();
   };
 
-  var escPressed = function(e) {
+  var escPressed = function() {
     var helpBox = document.getElementById("help-box");
     if (helpBox && helpBox.classList.contains("show")) {
       // Bootstrap 4 requires jQuery for modal hide
@@ -997,22 +1003,11 @@ var Octobox = (function() {
     }
   };
 
-  var setRowCurrent = function(row, add) {
-    var classes = ["current", "js-current"];
-    var td = row.querySelector("td.notification-checkbox");
-    if (add) {
-      classes.forEach(cls => td.classList.add(cls));
-    } else {
-      classes.forEach(cls => td.classList.remove(cls));
-    }
-  };
-
   var moveCursor = function(upOrDown) {
     var oldCurrent = getCurrentRow();
     var target = upOrDown === "up" ? oldCurrent.previousElementSibling : oldCurrent.nextElementSibling;
     if(target && target.tagName) {
-      setRowCurrent(oldCurrent, false);
-      setRowCurrent(target, true);
+      markRowCurrent(target);
       scrollToCursor();
     }
   };
@@ -1050,7 +1045,6 @@ var Octobox = (function() {
   var lastCheckedNotification = null;
 
   return {
-    moveCursorToClickedRow: moveCursorToClickedRow,
     checkAll: checkAll,
     muteThread: muteThread,
     muteSelected: muteSelected,

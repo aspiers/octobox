@@ -6,10 +6,26 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   setup do
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
-    @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
-    @notification2 = create(:notification, user: @user, subject_title: 'Second notification')
-    @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
+    @notification1 = create_previewable_notification('First notification')
+    @notification2 = create_previewable_notification('Second notification')
+    @notification3 = create_previewable_notification('Third notification')
+    page.current_window.resize_to(1400, 900)
     sign_in_as(@user)
+  end
+
+  test 'previews the selected notification on page load' do
+    show_preview_pane
+
+    assert_preview_matches_current_row
+  end
+
+  test 'keeps a directly requested notification selected and previewed' do
+    page.current_window.resize_to(2400, 900)
+    visit "/notifications/#{@notification2.id}"
+
+    assert_equal "notification-#{@notification2.id}", find('td.js-current').ancestor('tr')[:id]
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']"
+    assert_current_path "/notifications/#{@notification2.id}"
   end
 
   test 'j moves cursor down the list' do
@@ -21,6 +37,69 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     new_current = find('td.js-current').ancestor('tr')
     refute_equal initial_row[:id], new_current[:id]
+  end
+
+  test 'moving the cursor previews the newly selected notification' do
+    show_preview_pane
+    initial_row = find('td.js-current').ancestor('tr')
+
+    send_keys 'j'
+
+    assert_preview_matches_current_row
+    refute_equal initial_row[:id], find('td.js-current').ancestor('tr')[:id]
+  end
+
+  test 'keeps the preview on the latest selection when responses arrive out of order' do
+    show_preview_pane
+    rows = all('tr.notification')
+    delayed_id = rows[1][:id].delete_prefix('notification-')
+    page.execute_script(<<~JS)
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        var delay = String(url).includes('/notifications/#{delayed_id}') ? 300 : 0;
+        return new Promise(function(resolve, reject) {
+          setTimeout(function() {
+            originalFetch(url, options).then(resolve, reject);
+          }, delay);
+        });
+      };
+    JS
+
+    send_keys 'j'
+    send_keys 'j'
+    sleep 0.5
+
+    assert_preview_matches_current_row
+  end
+
+  test 'clicking a row previews that notification' do
+    show_preview_pane
+    target_row = all('tr.notification')[1]
+    page.execute_script("document.querySelector('##{target_row[:id]} td.notification-repo').click()")
+
+    assert_equal target_row[:id], find('td.js-current').ancestor('tr')[:id]
+    assert_preview_matches_current_row
+  end
+
+  test 'clicking a row action keeps the current selection and preview' do
+    show_preview_pane
+    current_row = find('td.js-current').ancestor('tr')
+    target_row = all('tr.notification').find { |row| row[:id] != current_row[:id] }
+
+    target_row.find('.toggle-star').click
+
+    assert_equal current_row[:id], find('td.js-current').ancestor('tr')[:id]
+    assert_preview_matches_current_row
+  end
+
+  test 'archiving previews the next selected notification' do
+    show_preview_pane
+    archived_row = find('td.js-current').ancestor('tr')
+
+    send_keys 'e'
+
+    assert_no_selector "##{archived_row[:id]}", wait: 5
+    assert_preview_matches_current_row
   end
 
   test 'k moves cursor up the list' do
@@ -205,6 +284,21 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
   def set_preview_scroll_top(value)
     page.execute_script("document.getElementById('thread').scrollTop = #{value}")
+  end
+
+  def create_previewable_notification(title)
+    create(:notification, user: @user, subject: create(:subject), subject_title: title)
+  end
+
+  def show_preview_pane
+    page.current_window.resize_to(2400, 900)
+    visit '/'
+  end
+
+  def assert_preview_matches_current_row
+    current_row = find('td.js-current').ancestor('tr')
+    notification_id = current_row[:id].delete_prefix('notification-')
+    assert_selector "#notification-thread[data-id='#{notification_id}']", wait: 2
   end
 
   def send_keys(*keys)

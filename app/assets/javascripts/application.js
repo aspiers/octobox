@@ -160,12 +160,6 @@ document.addEventListener('click', function(event) {
 });
 
 document.addEventListener('click', function(event) {
-  if(event.target.matches('tr.notification')) {
-    Octobox.moveCursorToClickedRow();
-  }
-});
-
-document.addEventListener('click', function(event) {
   if(event.target.matches('[data-toggle="offcanvas"]')) {
     Octobox.toggleOffCanvas();
   }
@@ -187,8 +181,11 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('click', function(e) {
-  if(e.target.closest('tr.notification')) {
-    Octobox.markRowCurrent(e.target.closest('tr.notification'));
+  var row = e.target.closest('tr.notification');
+  if(row) {
+    var threadLink = e.target.closest('.thread-link');
+    var interactiveControl = e.target.closest("a, button, input, label, [role='button'], .toggle-star");
+    if (threadLink || !interactiveControl) Octobox.markRowCurrent(row, !threadLink);
   }
 });
 
