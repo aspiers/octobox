@@ -208,16 +208,20 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   end
 
   test 'shift-e archives the current notification and opens the next preview' do
+    @notification1.update_column(:updated_at, 3.minutes.ago)
+    @notification2.update_column(:updated_at, 2.minutes.ago)
+    @notification3.update_column(:updated_at, 1.minute.ago)
+    visit '/'
+
     current_row = make_current(@notification2)
     current_row_id = current_row[:id]
     find("##{current_row_id} a.thread-link").click
     assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
-    next_href = find('#thread a.next.btn-outline-dark')[:href]
-    next_id = next_href[%r{/notifications/(\d+)}, 1]
+    assert_equal @notification1.id.to_s, find('#thread a.next.btn-outline-dark')[:href][%r{/notifications/(\d+)}, 1]
 
     send_keys :shift, 'e'
 
-    assert_selector "#notification-thread[data-id='#{next_id}']", wait: 2
+    assert_selector "#notification-thread[data-id='#{@notification1.id}']", wait: 2
     assert_no_selector "##{current_row_id}"
     assert @notification2.reload.archived?
   end
