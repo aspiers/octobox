@@ -44,6 +44,26 @@ class NotificationListTest < ApplicationSystemTestCase
     end
   end
 
+  test 'announces arrivals without inserting rows and clears the notice on refresh' do
+    Octobox.config.stubs(:push_notifications).returns(true)
+    visit '/?unread=true'
+
+    initial_row_ids = all("tr[id^='notification-']").map { |row| row[:id] }
+    assert_selector "meta[name='push_notifications']", visible: :all
+
+    page.execute_script(<<~JS)
+      App.notifications.received({ arrived: true });
+      App.notifications.received({ arrived: true });
+    JS
+
+    assert_selector '.js-new-notifications:not(.d-none)', text: '2 new notifications. Click to refresh.'
+    assert_equal initial_row_ids, all("tr[id^='notification-']").map { |row| row[:id] }
+
+    find('.js-new-notifications-refresh').click
+    assert_selector '.js-new-notifications.d-none', visible: :all
+    assert_current_path '/?unread=true'
+  end
+
   test 'sidebar starred link navigates to starred view' do
     starred = create(:notification, user: @user, starred: true, subject_title: 'Starred item')
     within '.flex-sidebar' do
