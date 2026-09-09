@@ -378,7 +378,10 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   end
 
   test 'enter retains the GitHub fallback when no preview is available' do
-    notification = create(:notification, user: @user, subject_title: 'No preview available')
+    subject_url = 'https://api.github.com/repos/octobox/octobox/issues/999999999'
+    assert_not Subject.exists?(url: subject_url)
+    notification = create(:notification, user: @user, subject_url: subject_url,
+                                         subject_title: 'No preview available')
     visit '/'
     current_row = make_current(notification)
     link_selector = "##{current_row[:id]} td.notification-subject .link"
