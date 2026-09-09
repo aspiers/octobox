@@ -1088,6 +1088,19 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal assigns(:comments).length, 10
   end
 
+  test 'expand comments renders the full page for an XHR request' do
+    sign_in_as(@user)
+    notification = create(:notification, user: @user)
+    subject = create(:subject, notifications: [notification], comment_count: 1)
+    create(:comment, subject: subject)
+
+    get expand_comments_notification_path(notification), xhr: true
+
+    assert_response :success
+    assert_template 'notifications/show'
+    assert_select '.card-comment', count: 1
+  end
+
   test 'creates a new comment when a comment is posted' do
     stub_fetch_subject_enabled
     sign_in_as(@user)
@@ -1100,6 +1113,22 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to notification_path(notification)
     assert_equal notification.subject.comments.count, 1
+  end
+
+  test 'redirects after a comment is posted over XHR' do
+    stub_fetch_subject_enabled
+    sign_in_as(@user)
+    subject = create(:subject)
+    notification = create(:notification, user: @user, subject: subject)
+
+    stub_request(:post, "#{subject.url}/comments").
+      to_return({ status: 200, body: file_fixture('new_comment.json'), headers: {'Content-Type' => 'application/json'}})
+    post comment_notification_path(notification),
+         params: { id: notification.id, comment: { body: 'blah' } },
+         headers: { 'HTTP_REFERER' => notification_url(notification) },
+         xhr: true
+
+    assert_redirected_to notification_path(notification)
   end
 
   test 'renders the lookup page as json if authenticated' do

@@ -18,11 +18,7 @@ class NotificationsController < ApplicationController
     scope = notifications_for_presentation.newest
     scope = load_and_count_notifications(scope) unless request.xhr?
 
-    ids = scope.pluck(:id)
-    position = ids.index(params[:id].to_i)
-    @notification = current_user.notifications.find(params[:id])
-    @previous = ids[position-1] unless position.nil? || position-1 < 0
-    @next = ids[position+1] unless position.nil? || position+1 > ids.length
+    load_notification_navigation(scope)
 
     if @notification.subject && @notification.subject.commentable?
       comments_loaded = 5
@@ -37,14 +33,9 @@ class NotificationsController < ApplicationController
   end
 
   def expand_comments
-    scope = notifications_for_presentation.newest
-    scope = load_and_count_notifications(scope) unless request.xhr?
+    scope = load_and_count_notifications(notifications_for_presentation.newest)
 
-    ids = scope.pluck(:id)
-    position = ids.index(params[:id].to_i)
-    @notification = current_user.notifications.find(params[:id])
-    @previous = ids[position-1] unless position.nil? || position-1 < 0
-    @next = ids[position+1] unless position.nil? || position+1 > ids.length
+    load_notification_navigation(scope)
 
     @comments_left_to_load = 0
 
@@ -54,11 +45,7 @@ class NotificationsController < ApplicationController
       @comments = []
     end
 
-    if request.xhr?
-      render partial: "notifications/comments", locals:{comments: @comments}, layout: false
-    else
-      render 'notifications/show'
-    end
+    render 'notifications/show'
   end
 
   def comment
@@ -66,11 +53,7 @@ class NotificationsController < ApplicationController
 
     if current_user.can_comment?(subject)
       subject.comment(current_user, params[:comment][:body]) if subject.commentable?
-      if request.xhr?
-        render partial: "notifications/comments", locals:{comments: subject.comments.last}, layout: false
-      else
-        redirect_back fallback_location: notification_path
-      end
+      redirect_back fallback_location: notification_path
     else
       flash[:error] = 'Could not post your comment'
       redirect_back fallback_location: notification_path
@@ -157,5 +140,15 @@ class NotificationsController < ApplicationController
     else
       render json: { error: Sidekiq::Status::get(current_user.sync_job_id, :exception) }, status: :ok
     end
+  end
+
+  private
+
+  def load_notification_navigation(scope)
+    ids = scope.pluck(:id)
+    position = ids.index(params[:id].to_i)
+    @notification = current_user.notifications.find(params[:id])
+    @previous = ids[position-1] unless position.nil? || position-1 < 0
+    @next = ids[position+1] unless position.nil? || position+1 > ids.length
   end
 end
