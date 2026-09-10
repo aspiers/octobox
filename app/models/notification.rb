@@ -43,6 +43,13 @@ class Notification < ApplicationRecord
       if "RepositoryInvitation" == api_response.subject.type
         attrs[:subject_url] = "#{api_response.repository.html_url}/invitations"
       end
+      if attrs[:subject_url].blank? && "CheckSuite" == api_response.subject.type
+        # GitHub sends CheckSuite notifications with a null subject url: a check
+        # suite has no REST resource of its own. Without a stand-in the presence
+        # validation rejects the record and the notification is dropped, so point
+        # at the repository's Actions tab, which is where the run is visible.
+        attrs[:subject_url] = "#{api_response.repository.html_url}/actions"
+      end
       attrs[:updated_at] = Time.current if api_response.updated_at.nil?
       attrs
     end
@@ -170,7 +177,13 @@ class Notification < ApplicationRecord
     self.archived = false if archived.nil? # fixup existing records where archived is nil
     unarchive_if_updated
     if changed?
-      save(touch: false)
+      unless save(touch: false)
+        # Silently discarding the record here means a notification vanishes with
+        # no trace while sync still reports success, which is how CheckSuite
+        # notifications went missing for years. Log and skip the dependent work.
+        Rails.logger.warn("Discarding notification #{github_id} (#{subject_type}): #{errors.full_messages.join(', ')}")
+        return false
+      end
       update_repository(api_response)
       update_subject
     end

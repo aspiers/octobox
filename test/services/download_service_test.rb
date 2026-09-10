@@ -103,6 +103,20 @@ class DownloadServiceTest < ActiveSupport::TestCase
     assert_match %r{https://github.com/.+/invitations$}, notification.subject_url
   end
 
+  test "#download stores a CheckSuite notification that has no subject url" do
+    stub_fetch_subject_enabled(value: false)
+    stub_notifications_request(body: file_fixture('check_suite_notifications.json'))
+    user = create(:user)
+
+    2.times { user.download_service.download }
+
+    assert_equal 1, user.notifications.count
+    notification = user.notifications.first
+    assert_equal 900, notification.github_id
+    assert_equal 'CheckSuite', notification.subject_type
+    assert_equal 'https://github.com/octobox/octobox/actions', notification.subject_url
+  end
+
   test '#download handles no new notifications' do
     user = create(:morty)
     download_service = DownloadService.new(user)
