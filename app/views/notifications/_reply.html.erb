@@ -1,4 +1,4 @@
-<%= form_tag comment_notification_path, method: :post, class: 'card mt-3', id: 'reply', enforce_utf8: false do |f| %>
+<%= form_tag comment_notification_path, method: :post, class: 'card mt-3', id: 'reply', enforce_utf8: false, remote: true do |f| %>
 	<div class='card-header'>
 		<%= image_tag current_user.github_avatar_url + "?size=20", width: 20, class: 'img-rounded navbar-avatar', alt: '' %>
 	</div>

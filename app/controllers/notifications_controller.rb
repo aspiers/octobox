@@ -51,11 +51,23 @@ class NotificationsController < ApplicationController
     subject = current_user.notifications.find(params[:id]).subject
 
     if current_user.can_comment?(subject)
-      subject.comment(current_user, params[:comment][:body]) if subject.commentable?
-      redirect_back fallback_location: notification_path
+      comment = subject.comment(current_user, params[:comment][:body]) if subject.commentable?
+      if request.xhr?
+        if comment&.persisted?
+          render partial: "notifications/issue_comment", locals: {comment: comment}, layout: false
+        else
+          head :unprocessable_entity
+        end
+      else
+        redirect_back fallback_location: notification_path
+      end
     else
       flash[:error] = 'Could not post your comment'
-      redirect_back fallback_location: notification_path
+      if request.xhr?
+        head :forbidden
+      else
+        redirect_back fallback_location: notification_path
+      end
     end
   end
 
