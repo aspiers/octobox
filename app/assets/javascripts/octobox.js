@@ -186,6 +186,10 @@ var Octobox = (function() {
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
       var button = e.target.closest("button, [role='button']");
       var buttonActivation = button && [13, 32].includes(e.which);
+      if (helpBox && !typing && !buttonActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.which === 13) {
+        openCurrentLink(e);
+        return;
+      }
       if (helpBox && !typing && !buttonActivation && !e.metaKey) {
         var shortcutMap = (!e.ctrlKey && !e.altKey)
           ? (e.shiftKey ? shiftShortcuts : shortcuts)
@@ -914,6 +918,17 @@ var Octobox = (function() {
     if (searchBox) searchBox.focus();
   }
 
+  var openCurrentLink = function(e) {
+    e.preventDefault();
+    var currentRow = getCurrentRow();
+    if (currentRow) {
+      var link = currentRow.querySelector("td.notification-subject .link");
+      if (link) {
+        link.click();
+      }
+    }
+  };
+
   var threadIsOpen = function() {
     var flexMain = document.querySelector(".flex-main");
     return DOM.thread && flexMain && flexMain.classList.contains("show-thread");
@@ -994,19 +1009,16 @@ var Octobox = (function() {
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
-    var header = document.createElement("div");
-    header.className = "flex-header header-flash-messages";
-    var alert = document.createElement("div");
-    alert.className = "alert alert-" + type + " fade show";
-    var close = document.createElement("button");
-    close.className = "close";
-    close.dataset.dismiss = "alert";
-    close.textContent = "x";
-    alert.append(close, document.createTextNode(message));
-    header.append(alert);
-
+    var alert_html = [
+      "<div class='flex-header header-flash-messages'>",
+      "  <div class='alert alert-" + type + " fade show'>",
+      "    <button class='close' data-dismiss='alert'>x</button>",
+             message,
+      "  </div>",
+      "</div>"
+    ].join("\n");
     var flexHeader = document.querySelector(".flex-header");
-    if (flexHeader) flexHeader.after(header);
+    if (flexHeader) flexHeader.insertAdjacentHTML('afterend', alert_html);
   };
 
   var autoSync = function() {
