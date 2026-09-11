@@ -196,15 +196,28 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_includes star[:class], 'star-active'
   end
 
-  test 'enter opens current notification in the Octobox preview' do
+  test 'enter opens current notification on GitHub in a new window and marks it read' do
     current_row = make_current(@notification1)
-    assert_selector "##{current_row[:id]} a.thread-link"
-    assert_no_selector '.flex-main.show-thread'
+    github_url = @notification1.web_url
+    page.execute_script(<<~JS)
+      document.addEventListener('click', function(event) {
+        var link = event.target.closest('a[data-octobox-github]');
+        if (!link) return;
+        event.preventDefault();
+        window.lastOpenedLink = { url: link.href, target: link.target, rel: link.rel };
+      }, true);
+    JS
 
     send_keys :enter
 
-    assert_selector '.flex-main.show-thread', wait: 2
-    assert_selector '#notification-thread'
+    opened_link = page.evaluate_script('window.lastOpenedLink')
+    assert_equal github_url, opened_link['url']
+    assert_equal '_blank', opened_link['target']
+    assert_equal 'noopener', opened_link['rel']
+    assert_no_selector '.flex-main.show-thread'
+    assert_no_selector "##{current_row[:id]}.active"
+    sleep 0.3
+    refute @notification1.reload.unread
   end
 
   test 'brackets open the previous and next notifications in the preview' do
@@ -375,28 +388,6 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
   def set_preview_scroll_top(value)
     page.execute_script("document.getElementById('thread').scrollTop = #{value}")
-  end
-
-  test 'enter retains the GitHub fallback when no preview is available' do
-    subject_url = 'https://api.github.com/repos/octobox/octobox/issues/999999999'
-    assert_not Subject.exists?(url: subject_url)
-    notification = create(:notification, user: @user, subject_url: subject_url,
-                                         subject_title: 'No preview available')
-    visit '/'
-    current_row = make_current(notification)
-    link_selector = "##{current_row[:id]} td.notification-subject .link"
-    assert_no_selector "#{link_selector}.thread-link"
-    page.execute_script(<<~JS)
-      document.querySelector(#{link_selector.to_json}).addEventListener('click', function(event) {
-        event.preventDefault();
-        window.lastEnterFallbackUrl = this.href;
-      });
-    JS
-
-    send_keys :enter
-
-    assert_equal notification.web_url, page.evaluate_script('window.lastEnterFallbackUrl')
-    assert_no_selector '.flex-main.show-thread'
   end
 
   test 'o opens current notification on GitHub in a new window and marks it read' do

@@ -914,17 +914,6 @@ var Octobox = (function() {
     if (searchBox) searchBox.focus();
   }
 
-  var openCurrentLink = function(e) {
-    e.preventDefault();
-    var currentRow = getCurrentRow();
-    if (currentRow) {
-      var link = currentRow.querySelector("td.notification-subject .link");
-      if (link) {
-        link.click();
-      }
-    }
-  };
-
   var threadIsOpen = function() {
     var flexMain = document.querySelector(".flex-main");
     return DOM.thread && flexMain && flexMain.classList.contains("show-thread");
@@ -1005,16 +994,19 @@ var Octobox = (function() {
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
-    var alert_html = [
-      "<div class='flex-header header-flash-messages'>",
-      "  <div class='alert alert-" + type + " fade show'>",
-      "    <button class='close' data-dismiss='alert'>x</button>",
-             message,
-      "  </div>",
-      "</div>"
-    ].join("\n");
+    var header = document.createElement("div");
+    header.className = "flex-header header-flash-messages";
+    var alert = document.createElement("div");
+    alert.className = "alert alert-" + type + " fade show";
+    var close = document.createElement("button");
+    close.className = "close";
+    close.dataset.dismiss = "alert";
+    close.textContent = "x";
+    alert.append(close, document.createTextNode(message));
+    header.append(alert);
+
     var flexHeader = document.querySelector(".flex-header");
-    if (flexHeader) flexHeader.insertAdjacentHTML('afterend', alert_html);
+    if (flexHeader) flexHeader.after(header);
   };
 
   var autoSync = function() {
@@ -1105,7 +1097,7 @@ var Octobox = (function() {
     69:  toggleArchive,    // e
     77:  muteSelected,     // m
     8:   scrollThreadPageUp,     // Backspace
-    13:  openCurrentLink,        // Enter
+    13:  openCurrentGitHubLink,  // Enter
     32:  scrollThreadPageDown,   // Space
     35:  scrollThreadToBottom,   // End
     36:  scrollThreadToTop,      // Home
