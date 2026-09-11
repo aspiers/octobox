@@ -81,6 +81,49 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_preview_matches_current_row
   end
 
+  test 'renders preview errors as text' do
+    show_preview_pane
+    target_row = all('tr.notification')[1]
+    error_message = '<img src=x onerror="document.body.dataset.xss=true">'
+    page.execute_script(<<~JS)
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (String(url).includes('/notifications/#{target_row[:id].delete_prefix('notification-')}')) {
+          return Promise.resolve(new Response(
+            JSON.stringify({ error: #{error_message.to_json} }),
+            { headers: { 'content-type': 'application/json' } }
+          ));
+        }
+        return originalFetch(url, options);
+      };
+      Octobox.markRowCurrent(document.querySelector('##{target_row[:id]}'));
+    JS
+
+    assert_text error_message
+    assert_no_selector '.header-flash-messages img', visible: :all
+    assert_nil page.evaluate_script('document.body.dataset.xss')
+  end
+
+  test 'rejects external pagination targets' do
+    page.execute_script(<<~JS)
+      var item = document.createElement('div');
+      item.className = 'page-item next';
+      var link = document.createElement('a');
+      link.className = 'page-link';
+      link.rel = 'next';
+      link.href = 'https://example.com/phishing';
+      item.appendChild(link);
+      document.body.appendChild(item);
+    JS
+
+    send_keys 'n'
+
+    assert_current_path '/'
+    page.execute_script("document.querySelector('.page-link[rel=next]').href = '/settings'")
+    send_keys 'n'
+    assert_current_path '/settings', wait: 2
+  end
+
   test 'clicking a row action keeps the current selection and preview' do
     show_preview_pane
     current_row = find('td.js-current').ancestor('tr')

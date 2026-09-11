@@ -25,6 +25,29 @@ var Octobox = (function() {
     });
   };
 
+  // HTML fetched from Octobox is already escaped by Rails. Parsing it here keeps
+  // scripts inert while preserving the server-rendered notification markup.
+  var replaceWithServerRenderedHtml = function(element, html) {
+    var parsed = new DOMParser().parseFromString(String(html), "text/html");
+    element.replaceChildren(...Array.from(parsed.body.childNodes));
+  };
+
+  var showLoading = function(element) {
+    var loading = document.getElementById('loading');
+    if (!element || !loading) return;
+    element.replaceChildren(...Array.from(loading.cloneNode(true).childNodes));
+  };
+
+  var navigateWithinOctobox = function(href) {
+    if (!href) return false;
+
+    var target = new URL(href, window.location.href);
+    if (target.origin !== window.location.origin) return false;
+
+    window.location.assign(target.href);
+    return true;
+  };
+
   var maybeConfirm = function(message){
     if(document.body.classList.contains('disable_confirmations')) {
       return true;
@@ -46,7 +69,7 @@ var Octobox = (function() {
         return response.json();
       })
       .then(data => {
-        pinned_search.innerHTML = data.count;
+        pinned_search.textContent = data.count;
       })
       .catch(() => {
         pinned_search.remove();
@@ -387,7 +410,7 @@ var Octobox = (function() {
 
       if(syncLink) {
         setTimeout(() => {
-          window.location.href = syncLink.getAttribute("href");
+          navigateWithinOctobox(syncLink.getAttribute("href"));
         }, 10);
       }
     }
@@ -493,8 +516,8 @@ var Octobox = (function() {
   };
 
   var star = function(id){
-    var fill_star_path = '<path fill-rule="evenodd" d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"></path>'
-    var empty_star_path = '<path fill-rule="evenodd" d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25zm0 2.445L6.615 5.5a.75.75 0 01-.564.41l-3.097.45 2.24 2.184a.75.75 0 01.216.664l-.528 3.084 2.769-1.456a.75.75 0 01.698 0l2.77 1.456-.53-3.084a.75.75 0 01.216-.664l2.24-2.183-3.096-.45a.75.75 0 01-.564-.41L8 2.694v.001z"></path>'
+    var fill_star_path = 'M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z';
+    var empty_star_path = 'M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25zm0 2.445L6.615 5.5a.75.75 0 01-.564.41l-3.097.45 2.24 2.184a.75.75 0 01.216.664l-.528 3.084 2.769-1.456a.75.75 0 01.698 0l2.77 1.456-.53-3.084a.75.75 0 01.216-.664l2.24-2.183-3.096-.45a.75.75 0 01-.564-.41L8 2.694v.001z';
 
     var notificationRow = document.getElementById("notification-" + id);
     var svg = null;
@@ -517,18 +540,21 @@ var Octobox = (function() {
     function toggleStar(element, toActive) {
       if (!element) return;
 
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('fill-rule', 'evenodd');
+      path.setAttribute('d', toActive ? fill_star_path : empty_star_path);
+      element.replaceChildren(path);
+
       if (toActive) {
         element.classList.remove('star-inactive');
         element.classList.add('star-active');
         element.classList.remove('octicon-star');
         element.classList.add('octicon-star-fill');
-        element.innerHTML = fill_star_path;
       } else {
         element.classList.remove('star-active');
         element.classList.add('star-inactive');
         element.classList.remove('octicon-star-fill');
         element.classList.add('octicon-star');
-        element.innerHTML = empty_star_path;
       }
     }
 
@@ -747,8 +773,7 @@ var Octobox = (function() {
 
     var requestSequence = ++threadRequestSequence;
     var thread = document.getElementById('thread');
-    var loading = document.getElementById('loading');
-    if (thread && loading) thread.innerHTML = loading.innerHTML;
+    showLoading(thread);
 
     fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => {
@@ -761,7 +786,7 @@ var Octobox = (function() {
           notify(data.error, "danger");
         } else {
           var thread = document.getElementById('thread');
-          if (thread) thread.innerHTML = data;
+          if (thread) replaceWithServerRenderedHtml(thread, data);
           subscribeToComments();
         }
       });
@@ -791,8 +816,7 @@ var Octobox = (function() {
     history.pushState({thread: href}, 'Octobox', href);
 
     var moreComments = document.getElementById('more-comments');
-    var loading = document.getElementById('loading');
-    if (moreComments && loading) moreComments.innerHTML = loading.innerHTML;
+    showLoading(moreComments);
 
     fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => {
@@ -804,7 +828,7 @@ var Octobox = (function() {
           notify(data.error, "danger");
         } else {
           var moreComments = document.getElementById('more-comments');
-          if (moreComments) moreComments.innerHTML = data;
+          if (moreComments) replaceWithServerRenderedHtml(moreComments, data);
         }
       });
 
@@ -856,12 +880,12 @@ var Octobox = (function() {
 
   var nextPage = function() {
     var nextBtn = document.querySelector(".page-item:last-child .page-link[rel=next]");
-    if (nextBtn) window.location.href = nextBtn.getAttribute('href');
+    if (nextBtn) navigateWithinOctobox(nextBtn.getAttribute('href'));
   }
 
   var prevPage = function() {
     var prevBtn = document.querySelector(".page-item:first-child .page-link[rel=prev]");
-    if (prevBtn) window.location.href = prevBtn.getAttribute('href');
+    if (prevBtn) navigateWithinOctobox(prevBtn.getAttribute('href'));
   }
 
   var markCurrent = function() {
@@ -944,16 +968,21 @@ var Octobox = (function() {
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
-    var alert_html = [
-      "<div class='flex-header header-flash-messages'>",
-      "  <div class='alert alert-" + type + " fade show'>",
-      "    <button class='close' data-dismiss='alert'>x</button>",
-             message,
-      "  </div>",
-      "</div>"
-    ].join("\n");
     var flexHeader = document.querySelector(".flex-header");
-    if (flexHeader) flexHeader.insertAdjacentHTML('afterend', alert_html);
+    if (!flexHeader) return;
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'flex-header header-flash-messages';
+    var alert = document.createElement('div');
+    alert.className = 'alert alert-' + type + ' fade show';
+    var close = document.createElement('button');
+    close.className = 'close';
+    close.dataset.dismiss = 'alert';
+    close.textContent = 'x';
+    alert.appendChild(close);
+    alert.appendChild(document.createTextNode(String(message)));
+    wrapper.appendChild(alert);
+    flexHeader.insertAdjacentElement('afterend', wrapper);
   };
 
   var autoSync = function() {
