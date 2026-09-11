@@ -42,6 +42,79 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
   end
 
+  test 'POST #create persists GitHub App refresh credentials' do
+    expires_at = 8.hours.from_now.to_i
+    OmniAuth.config.mock_auth[:github_app] = OmniAuth::AuthHash.new(
+      'provider' => 'github_app',
+      'uid' => @user.github_id,
+      'info' => {'nickname' => @user.github_login},
+      'credentials' => {
+        'token' => 'expiring-access-token',
+        'refresh_token' => 'rotating-refresh-token',
+        'expires_at' => expires_at,
+        'expires' => true
+      }
+    )
+
+    post '/auth/github_app/callback', env: {'omniauth.auth' => OmniAuth.config.mock_auth[:github_app]}
+
+    assert_redirected_to root_path
+    @user.reload
+    assert_equal 'expiring-access-token', @user.app_token
+    assert_equal 'rotating-refresh-token', @user.app_refresh_token
+    assert_equal expires_at, @user.app_token_expires_at.to_i
+  ensure
+    OmniAuth.config.mock_auth.delete(:github_app)
+  end
+
+  %w[refresh_token expires_at].each do |missing_field|
+    test "POST #create rejects expiring GitHub App credentials without #{missing_field}" do
+      credentials = {
+        'token' => 'expiring-access-token',
+        'refresh_token' => 'rotating-refresh-token',
+        'expires_at' => 8.hours.from_now.to_i,
+        'expires' => true
+      }
+      credentials.delete(missing_field)
+      auth = OmniAuth::AuthHash.new(
+        'provider' => 'github_app',
+        'uid' => @user.github_id,
+        'info' => {'nickname' => @user.github_login},
+        'credentials' => credentials
+      )
+
+      post '/auth/github_app/callback', env: {'omniauth.auth' => auth}
+
+      assert_redirected_to root_path
+      assert_equal 'There was a problem authenticating with GitHub, please try again.', flash[:error]
+      assert_nil @user.reload.app_token
+    end
+  end
+
+  {
+    'without an access token' => {'expires' => false},
+    'with partial refresh metadata' => {
+      'token' => 'expiring-access-token',
+      'refresh_token' => 'rotating-refresh-token',
+      'expires' => false
+    }
+  }.each do |description, credentials|
+    test "POST #create rejects GitHub App credentials #{description}" do
+      auth = OmniAuth::AuthHash.new(
+        'provider' => 'github_app',
+        'uid' => @user.github_id,
+        'info' => {'nickname' => @user.github_login},
+        'credentials' => credentials
+      )
+
+      post '/auth/github_app/callback', env: {'omniauth.auth' => auth}
+
+      assert_redirected_to root_path
+      assert_equal 'There was a problem authenticating with GitHub, please try again.', flash[:error]
+      assert_nil @user.reload.app_token
+    end
+  end
+
   test 'POST #create redirects to a relative omniauth origin' do
     OmniAuth.config.mock_auth[:github].uid = @user.github_id
     OmniAuth.config.before_callback_phase { |env| env['omniauth.origin'] = '/settings' }

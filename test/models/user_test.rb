@@ -76,6 +76,46 @@ class UserTest < ActiveSupport::TestCase
     assert_equal 'abcdefg', @user.access_token
   end
 
+  test '#assign_from_auth_hash stores encrypted GitHub App refresh credentials' do
+    auth = OmniAuth::AuthHash.new(
+      'uid' => @user.github_id,
+      'info' => {'nickname' => @user.github_login},
+      'credentials' => {
+        'token' => 'expiring-access-token',
+        'refresh_token' => 'rotating-refresh-token',
+        'expires_at' => 8.hours.from_now.to_i
+      }
+    )
+
+    @user.assign_from_auth_hash(auth, 'github_app')
+
+    @user.reload
+    assert_equal 'expiring-access-token', @user.app_token
+    assert_equal 'rotating-refresh-token', @user.app_refresh_token
+    assert_in_delta 8.hours.from_now.to_i, @user.app_token_expires_at.to_i, 2
+    refute_equal 'rotating-refresh-token', @user.encrypted_app_refresh_token
+  end
+
+  test '#assign_from_auth_hash clears stale refresh state for a non-expiring app token' do
+    @user.update!(
+      app_token: 'old-access-token',
+      app_refresh_token: 'old-refresh-token',
+      app_token_expires_at: 1.minute.ago
+    )
+    auth = OmniAuth::AuthHash.new(
+      'uid' => @user.github_id,
+      'info' => {'nickname' => @user.github_login},
+      'credentials' => {'token' => 'non-expiring-access-token'}
+    )
+
+    @user.assign_from_auth_hash(auth, 'github_app')
+
+    @user.reload
+    assert_equal 'non-expiring-access-token', @user.app_token
+    assert_nil @user.app_refresh_token
+    assert_nil @user.app_token_expires_at
+  end
+
   test '#github_client returns an Octokit::Client with the correct access_token' do
     assert_equal @user.github_client.class, Octokit::Client
     assert_equal @user.github_client.access_token, @user.access_token
@@ -235,6 +275,91 @@ class UserTest < ActiveSupport::TestCase
 
     assert_equal @app_user.comment_client(comment).class, Octokit::Client
     assert_equal @app_user.comment_client(comment).access_token, @app_user.app_token
+  end
+
+  test 'app installation client refreshes a token before expiry' do
+    @user.update!(
+      app_token: 'old-access-token',
+      app_refresh_token: 'old-refresh-token',
+      app_token_expires_at: 1.minute.from_now
+    )
+    @user.update_columns(refresh_interval: -1)
+    credentials = GithubAppUserTokenRefresher::Credentials.new(
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_at: 8.hours.from_now
+    )
+    refresher = mock
+    refresher.expects(:refresh).returns(credentials)
+    GithubAppUserTokenRefresher.expects(:new)
+      .with(refresh_token: 'old-refresh-token')
+      .returns(refresher)
+
+    client = @user.app_installation_client
+
+    assert_equal 'new-access-token', client.access_token
+    @user.reload
+    assert_equal 'new-access-token', @user.app_token
+    assert_equal 'new-refresh-token', @user.app_refresh_token
+    assert_in_delta 8.hours.from_now.to_i, @user.app_token_expires_at.to_i, 2
+  end
+
+  test 'app installation client does not refresh a healthy token' do
+    @user.update!(
+      app_token: 'healthy-access-token',
+      app_refresh_token: 'refresh-token',
+      app_token_expires_at: 6.minutes.from_now
+    )
+    GithubAppUserTokenRefresher.expects(:new).never
+
+    client = @user.app_installation_client
+
+    assert_equal 'healthy-access-token', client.access_token
+  end
+
+  test 'stale concurrent callers reuse credentials refreshed under the row lock' do
+    @user.update!(
+      app_token: 'old-access-token',
+      app_refresh_token: 'old-refresh-token',
+      app_token_expires_at: 1.minute.from_now
+    )
+    credentials = GithubAppUserTokenRefresher::Credentials.new(
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_at: 8.hours.from_now
+    )
+    refresher = mock(refresh: credentials)
+    GithubAppUserTokenRefresher.expects(:new).once.returns(refresher)
+    first_caller = User.find(@user.id)
+    stale_second_caller = User.find(@user.id)
+
+    first_client = first_caller.app_installation_client
+    second_client = stale_second_caller.app_installation_client
+
+    assert_equal 'new-access-token', first_client.access_token
+    assert_equal 'new-access-token', second_client.access_token
+  end
+
+  test 'expired token refresh failures return safely without logging secrets' do
+    @user.update!(
+      app_token: 'expired-access-token',
+      app_refresh_token: 'secret-refresh-token',
+      app_token_expires_at: 1.minute.ago
+    )
+    refresher = mock
+    refresher.expects(:refresh).raises(Faraday::ConnectionFailed.new('secret response body'))
+    GithubAppUserTokenRefresher.expects(:new).returns(refresher)
+    logged = []
+    Rails.logger.stubs(:warn).with { |message| logged << message; true }
+
+    assert_nil @user.app_installation_client
+
+    event = JSON.parse(logged.fetch(0))
+    assert_equal 'github_app_user_token_refresh_failed', event['event']
+    assert_equal @user.id, event['user_id']
+    assert_equal 'Faraday::ConnectionFailed', event['exception']
+    refute_includes logged.first, 'secret-refresh-token'
+    refute_includes logged.first, 'secret response body'
   end
 
   test '#import_notifications updates allowed fields on existing notifications' do

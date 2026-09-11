@@ -11,11 +11,21 @@ class HooksControllerTest < ActionController::TestCase
     send_webhook 'label'
   end
 
-  test 'github_app_authorization webhook payload' do
-    user = create(:user, app_token: 'abcdefg', github_id: 1060)
+  test 'github_app_authorization webhook payload clears all app credentials' do
+    user = create(
+      :user,
+      app_token: 'abcdefg',
+      app_refresh_token: 'refresh-token',
+      app_token_expires_at: 1.hour.from_now,
+      github_id: 1060
+    )
+
     send_webhook 'github_app_authorization'
+
     user.reload
     assert_nil user.app_token
+    assert_nil user.app_refresh_token
+    assert_nil user.app_token_expires_at
   end
 
   test 'installation_repositories webhook payload' do
