@@ -103,8 +103,8 @@ You can use keyboard shortcuts to navigate and perform certain actions:
  - `y` or `e` - Archive current/marked notification(s)
  - `m` - Mute current/marked notification(s)
  - `d` - Mark current/marked notification(s) as read here and on GitHub
- - `Enter` - Open current notification in Octobox when available
- - `o` - Open current notification on GitHub in a new window
+ - `Enter` or `o` - Open current notification on GitHub in a new window
+ - `Ctrl-Enter` or `Cmd-Enter` - Open or reload the current notification preview
 
 Press `?` for the help menu.
 

@@ -184,13 +184,13 @@ var Octobox = (function() {
       // disable shortcuts while typing or using button-like controls
       var helpBox = document.getElementById("help-box");
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
-      var button = e.target.closest("button, [role='button']");
-      var buttonActivation = button && [13, 32].includes(e.which);
-      if (helpBox && !typing && !buttonActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === "Enter") {
+      var interactive = e.target.closest("a, button, input, textarea, select, [role='button'], [contenteditable]");
+      var interactiveActivation = interactive && [13, 32].includes(e.which);
+      if (helpBox && !typing && !interactiveActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === "Enter") {
         openCurrentLink(e);
         return;
       }
-      if (helpBox && !typing && !buttonActivation && !e.metaKey) {
+      if (helpBox && !typing && !interactiveActivation && !e.metaKey) {
         var shortcutMap = (!e.ctrlKey && !e.altKey)
           ? (e.shiftKey ? shiftShortcuts : shortcuts)
           : {};

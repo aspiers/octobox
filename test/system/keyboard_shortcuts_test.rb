@@ -425,6 +425,29 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     refute @notification1.reload.unread
   end
 
+  test 'enter preserves focused controls and alt-enter remains unbound' do
+    make_current(@notification1)
+    page.execute_script(<<~JS)
+      var button = document.createElement('button');
+      button.id = 'native-control';
+      button.addEventListener('click', function() { window.nativeControlActivated = true; });
+      document.body.append(button);
+      document.addEventListener('click', function(event) {
+        if (event.target.closest('a[data-octobox-github]')) window.openedExternalNotification = true;
+      }, true);
+    JS
+
+    find('#native-control').send_keys(:enter)
+    page.execute_script(<<~JS)
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', which: 13, altKey: true, bubbles: true, cancelable: true
+      }));
+    JS
+
+    assert page.evaluate_script('window.nativeControlActivated || false')
+    refute page.evaluate_script('window.openedExternalNotification || false')
+  end
+
   test 'o ignores unsafe notification URLs' do
     current_row = make_current(@notification1)
     page.execute_script(<<~JS)
