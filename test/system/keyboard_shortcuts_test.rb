@@ -401,6 +401,20 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_selector '#notification-thread'
   end
 
+  test 'command-enter opens the current notification preview' do
+    make_current(@notification1)
+    page.execute_script(<<~JS)
+      var event = new KeyboardEvent('keydown', {
+        key: 'Enter', metaKey: true, bubbles: true, cancelable: true
+      });
+      Object.defineProperty(event, 'which', { value: 13 });
+      document.body.dispatchEvent(event);
+    JS
+
+    assert_selector '.flex-main.show-thread', wait: 2
+    assert_selector '#notification-thread'
+  end
+
   test 'o opens current notification on GitHub in a new window and marks it read' do
     current_row = make_current(@notification1)
     github_url = @notification1.web_url
@@ -439,9 +453,11 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     find('#native-control').send_keys(:enter)
     page.execute_script(<<~JS)
-      document.body.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter', which: 13, altKey: true, bubbles: true, cancelable: true
-      }));
+      var event = new KeyboardEvent('keydown', {
+        key: 'Enter', altKey: true, bubbles: true, cancelable: true
+      });
+      Object.defineProperty(event, 'which', { value: 13 });
+      document.body.dispatchEvent(event);
     JS
 
     assert page.evaluate_script('window.nativeControlActivated || false')
