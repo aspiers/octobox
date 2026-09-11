@@ -1042,6 +1042,20 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal assigns(:notifications).length, 1
   end
 
+  test 'XHR preview keeps both neighbors when notification timestamps are tied' do
+    sign_in_as(@user)
+    timestamp = Time.zone.parse('2026-09-11 10:00:00 UTC')
+    notifications = 3.times.map do
+      create(:notification, user: @user, updated_at: timestamp)
+    end
+
+    get notification_path(notifications.second), xhr: true
+
+    assert_response :success
+    assert_equal notifications.third.id, assigns(:previous)
+    assert_equal notifications.first.id, assigns(:next)
+  end
+
   test 'renders a notification page' do
     skip("This test fails intermittenly")
     sign_in_as(@user)
