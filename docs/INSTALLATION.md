@@ -406,6 +406,7 @@ Then create a new GitHub App, <https://github.com/settings/apps/new>, with the f
   - Commit statuses: Read-only
 - Subscribe to events: check all available options
 - Where can this GitHub App be installed: Any account if you want to be able to install it on multiple orgs
+- Optional features: disable **Expire user authorization tokens**. Octobox does not currently refresh expiring GitHub App user tokens, so leaving this enabled stops notification synchronization after the token expires (8 hours by default) until the user logs in again.
 
 Then add the following ENV variables to `.env` (or `heroku config:add` if you're hosting heroku)
 
