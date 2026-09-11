@@ -186,7 +186,7 @@ var Octobox = (function() {
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
       var button = e.target.closest("button, [role='button']");
       var buttonActivation = button && [13, 32].includes(e.which);
-      if (helpBox && !typing && !buttonActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.which === 13) {
+      if (helpBox && !typing && !buttonActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === "Enter") {
         openCurrentLink(e);
         return;
       }
