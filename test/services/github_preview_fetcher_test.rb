@@ -116,7 +116,7 @@ class GithubPreviewFetcherTest < ActiveSupport::TestCase
   test 'logs server failures without failing the collection sync' do
     url = 'https://api.github.com/repos/octobox/octobox/issues/56/comments'
     stub_request(:get, url).with(query: {per_page: '100'}).to_return(
-      status: 500,
+      status: 503,
       body: 'private server response',
       headers: {'Content-Type' => 'text/plain', 'Retry-After' => '30'}
     )
@@ -128,10 +128,25 @@ class GithubPreviewFetcherTest < ActiveSupport::TestCase
     assert_equal 1, @logger.messages.length
     message = @logger.messages.first
     event = JSON.parse(message)
-    assert_equal 'Octokit::InternalServerError', event['exception']
-    assert_equal 500, event['status']
+    assert_equal 'Octokit::ServiceUnavailable', event['exception']
+    assert_equal 503, event['status']
     assert_equal({'retry-after' => '30'}, event['rate_limit'])
     refute_includes message, 'private server response'
+  end
+
+  test 'logs network failures without exposing the exception message' do
+    url = 'https://api.github.com/repos/octobox/octobox/issues/56/comments'
+    stub_request(:get, url).with(query: {per_page: '100'})
+      .to_raise(Faraday::ConnectionFailed.new('private network detail'))
+
+    result = @fetcher.collection(url, operation: 'issue_comments')
+
+    refute result.complete?
+    assert_empty result.items
+    message = @logger.messages.fetch(0)
+    event = JSON.parse(message)
+    assert_equal 'Faraday::ConnectionFailed', event['exception']
+    refute_includes message, 'private network detail'
   end
 
   test 'stops at the page bound and marks the collection incomplete' do

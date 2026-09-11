@@ -20,25 +20,17 @@ class GithubPreviewFetcher
   RATE_LIMIT_HEADERS = %w[x-ratelimit-limit x-ratelimit-remaining x-ratelimit-reset retry-after].freeze
 
   def self.log_failure(error, operation:, subject_url:, logger: Rails.logger)
-    headers = error.response_headers || {}
+    headers = error.respond_to?(:response_headers) ? error.response_headers : {}
     normalized_headers = headers.to_h.transform_keys { |key| key.to_s.downcase.tr('_', '-') }
-    rate_limit = normalized_headers.slice(*RATE_LIMIT_HEADERS)
     event = {
       event: 'github_preview_fetch_failed',
       operation: operation,
       subject_url: subject_url,
       exception: error.class.name,
-      status: error.response_status,
-      rate_limit: rate_limit
+      rate_limit: normalized_headers.slice(*RATE_LIMIT_HEADERS)
     }
+    event[:status] = error.response_status if error.respond_to?(:response_status)
     logger.warn(event.to_json)
-  rescue NoMethodError
-    logger.warn({
-      event: 'github_preview_fetch_failed',
-      operation: operation,
-      subject_url: subject_url,
-      exception: error.class.name
-    }.to_json)
   end
 
   def initialize(client, logger: Rails.logger)
@@ -48,7 +40,7 @@ class GithubPreviewFetcher
 
   def resource(url)
     @client.get(url, request_options)
-  rescue Octokit::ClientError, Octokit::InternalServerError => error
+  rescue Octokit::ClientError, Octokit::ServerError, Faraday::Error => error
     log_failure(error, operation: 'resource', subject_url: url)
     nil
   end
@@ -69,7 +61,7 @@ class GithubPreviewFetcher
     end
 
     Result.new(items: items, complete: next_url.nil?)
-  rescue Octokit::ClientError, Octokit::InternalServerError, Faraday::Error => error
+  rescue Octokit::ClientError, Octokit::ServerError, Faraday::Error => error
     log_failure(error, operation: operation, subject_url: subject_url)
     Result.new(items: items, complete: false)
   end
