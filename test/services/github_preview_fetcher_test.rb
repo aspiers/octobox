@@ -149,6 +149,30 @@ class GithubPreviewFetcherTest < ActiveSupport::TestCase
     refute_includes message, 'private network detail'
   end
 
+  test 'logs safe metadata from Faraday response objects' do
+    response = Faraday::Response.new(
+      status: 503,
+      response_headers: {'Retry-After' => '30', 'Authorization' => 'Bearer secret-token'},
+      body: 'private response body'
+    )
+    error = Faraday::ServerError.new('private exception message', response)
+
+    GithubPreviewFetcher.log_failure(
+      error,
+      operation: 'issue_comments',
+      subject_url: 'https://api.github.com/repos/octobox/octobox/issues/56',
+      logger: @logger
+    )
+
+    message = @logger.messages.fetch(0)
+    event = JSON.parse(message)
+    assert_equal 503, event['status']
+    assert_equal({'retry-after' => '30'}, event['rate_limit'])
+    refute_includes message, 'secret-token'
+    refute_includes message, 'private response body'
+    refute_includes message, 'private exception message'
+  end
+
   test 'stops at the page bound and marks the collection incomplete' do
     base_url = 'https://api.github.com/repos/octobox/octobox/issues/56/comments'
     GithubPreviewFetcher::MAX_PAGES.times do |index|

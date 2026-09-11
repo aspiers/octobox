@@ -20,13 +20,14 @@ class GithubPreviewFetcher
   RATE_LIMIT_HEADERS = %w[x-ratelimit-limit x-ratelimit-remaining x-ratelimit-reset retry-after].freeze
 
   def self.log_failure(error, operation:, subject_url:, logger: Rails.logger)
-    response = if error.instance_variable_defined?(:@response)
-                 error.instance_variable_get(:@response).to_h
-               else
-                 {}
-               end
-    headers = response.fetch(:response_headers, {}) || {}
-    status = response[:status]
+    if error.is_a?(Faraday::Error)
+      headers = error.response_headers || {}
+      status = error.response_status
+    else
+      response = error.instance_variable_defined?(:@response) ? error.instance_variable_get(:@response).to_h : {}
+      headers = response.fetch(:response_headers, {}) || {}
+      status = response[:status]
+    end
     normalized_headers = headers.to_h.transform_keys { |key| key.to_s.downcase.tr('_', '-') }
     event = {
       event: 'github_preview_fetch_failed',
