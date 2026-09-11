@@ -25,7 +25,7 @@ var Octobox = (function() {
     });
   };
 
-  // HTML fetched from Octobox is already escaped by Rails. Parsing it here keeps
+  // Same-origin HTML fetched from Octobox is already escaped by Rails. Parsing it here keeps
   // scripts inert while preserving the server-rendered notification markup.
   var replaceWithServerRenderedHtml = function(element, html) {
     var parsed = new DOMParser().parseFromString(String(html), "text/html");
@@ -81,6 +81,11 @@ var Octobox = (function() {
       updatePinnedSearchCounts(element);
     });
   }
+
+  var setKeyboardNavigationMode = function(active) {
+    var table = document.querySelector(".table-notifications");
+    if (table) table.classList.toggle("keyboard-navigation-active", active);
+  };
 
   var updateFavicon = function () {
     fetch("/notifications/unread_count")
@@ -191,6 +196,10 @@ var Octobox = (function() {
 
     window.row_index = 1;
     window.current_id = undefined;
+
+    document.addEventListener('mousemove', function() {
+      setKeyboardNavigationMode(false);
+    });
 
     document.addEventListener('keydown', function(e) {
       // disable shortcuts while typing or using button-like controls
@@ -421,7 +430,7 @@ var Octobox = (function() {
     if (!table) return;
     var refresh_interval = parseInt(table.dataset.refreshInterval, 10);
     if (isNaN(refresh_interval)) return;
-    refresh_interval > 0 && setInterval(autoSync, refresh_interval)
+    if (refresh_interval > 0) setInterval(autoSync, refresh_interval);
   };
 
   var recoverPreviousCursorPosition = function() {
@@ -1033,6 +1042,7 @@ var Octobox = (function() {
   };
 
   var moveCursor = function(upOrDown) {
+    setKeyboardNavigationMode(true);
     var oldCurrent = getCurrentRow();
     var target = upOrDown === "up" ? oldCurrent.previousElementSibling : oldCurrent.nextElementSibling;
     if(target && target.tagName) {

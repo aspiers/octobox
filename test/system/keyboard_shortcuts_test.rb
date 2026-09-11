@@ -145,6 +145,25 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_preview_matches_current_row
   end
 
+  test 'pointer hover stays hidden after keyboard navigation until the mouse moves' do
+    hovered_row = all('tr.notification').last
+    hovered_row.hover
+    refute_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+
+    send_keys 'j'
+
+    table = find('.table-notifications')
+    assert_includes table[:class], 'keyboard-navigation-active'
+    assert_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+    selected_row_id = find('td.js-current').ancestor('tr')[:id]
+
+    page.execute_script("document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))")
+
+    refute_includes table[:class], 'keyboard-navigation-active'
+    refute_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+    assert_equal selected_row_id, find('td.js-current').ancestor('tr')[:id]
+  end
+
   test 'k moves cursor up the list' do
     send_keys 'j'
     sleep 0.1
