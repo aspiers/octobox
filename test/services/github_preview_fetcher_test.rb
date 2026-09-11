@@ -2,9 +2,22 @@
 require 'test_helper'
 
 class GithubPreviewFetcherTest < ActiveSupport::TestCase
+  class RecordingLogger
+    attr_reader :messages
+
+    def initialize
+      @messages = []
+    end
+
+    def warn(message)
+      @messages << message
+    end
+  end
+
   setup do
     @client = Octokit::Client.new
-    @fetcher = GithubPreviewFetcher.new(@client)
+    @logger = RecordingLogger.new
+    @fetcher = GithubPreviewFetcher.new(@client, logger: @logger)
   end
 
   test 'fetches every linked page with reaction media and API version headers' do
@@ -67,13 +80,58 @@ class GithubPreviewFetcherTest < ActiveSupport::TestCase
       }
     )
     stub_request(:get, second_url).with(query: {page: '2', per_page: '100'}).to_return(
-      status: 403, body: '{}', headers: {'Content-Type' => 'application/json'}
+      status: 403,
+      body: '{"message":"private response body"}',
+      headers: {
+        'Content-Type' => 'application/json',
+        'Authorization' => 'Bearer secret-token',
+        'X-RateLimit-Limit' => '5000',
+        'X-RateLimit-Remaining' => '0',
+        'X-RateLimit-Reset' => '1789123456'
+      }
     )
 
-    result = @fetcher.collection(first_url)
+    result = @fetcher.collection(
+      first_url,
+      operation: 'issue_comments',
+      subject_url: 'https://api.github.com/repos/octobox/octobox/issues/56'
+    )
 
     refute result.complete?
     assert_equal [1], result.items.map(&:id)
+    assert_equal 1, @logger.messages.length
+    message = @logger.messages.first
+    event = JSON.parse(message)
+    assert_equal 'github_preview_fetch_failed', event['event']
+    assert_equal 'issue_comments', event['operation']
+    assert_equal 'https://api.github.com/repos/octobox/octobox/issues/56', event['subject_url']
+    assert_equal 'Octokit::Forbidden', event['exception']
+    assert_equal 403, event['status']
+    assert_equal({'x-ratelimit-limit' => '5000', 'x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => '1789123456'}, event['rate_limit'])
+    refute_includes message, 'private response body'
+    refute_includes message, 'secret-token'
+    refute_includes message, 'Authorization'
+  end
+
+  test 'logs server failures without failing the collection sync' do
+    url = 'https://api.github.com/repos/octobox/octobox/issues/56/comments'
+    stub_request(:get, url).with(query: {per_page: '100'}).to_return(
+      status: 500,
+      body: 'private server response',
+      headers: {'Content-Type' => 'text/plain', 'Retry-After' => '30'}
+    )
+
+    result = @fetcher.collection(url, operation: 'issue_comments')
+
+    refute result.complete?
+    assert_empty result.items
+    assert_equal 1, @logger.messages.length
+    message = @logger.messages.first
+    event = JSON.parse(message)
+    assert_equal 'Octokit::InternalServerError', event['exception']
+    assert_equal 500, event['status']
+    assert_equal({'retry-after' => '30'}, event['rate_limit'])
+    refute_includes message, 'private server response'
   end
 
   test 'stops at the page bound and marks the collection incomplete' do

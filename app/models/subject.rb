@@ -196,7 +196,12 @@ class Subject < ApplicationRecord
   def download_status
     return unless github_client
     github_client.combined_status(repository_full_name, sha)
-  rescue Octokit::ClientError
+  rescue Octokit::ClientError, Octokit::InternalServerError => error
+    GithubPreviewFetcher.log_failure(
+      error,
+      operation: 'combined_status',
+      subject_url: url
+    )
     nil
   end
 
@@ -205,6 +210,8 @@ class Subject < ApplicationRecord
     since = comments.where(activity_kind: 'issue_comment').maximum(:created_at)
     GithubPreviewFetcher.new(client).collection(
       url.gsub('/pulls/', '/issues/') + '/comments',
+      operation: 'issue_comments',
+      subject_url: url,
       params: {since: since}
     )
   end

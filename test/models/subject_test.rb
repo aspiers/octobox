@@ -391,6 +391,28 @@ class SubjectTest < ActiveSupport::TestCase
     assert_empty subject.send(:download_comments, client).items
   end
 
+  test 'issue comment failures log safe metadata and return an incomplete result' do
+    subject = create(:subject, url: 'https://api.github.com/repos/octobox/octobox/issues/42')
+    stub_request(:get, subject.url + '/comments').with(query: {per_page: '100', since: nil}).to_return(
+      status: 500,
+      body: 'private response body',
+      headers: {'Content-Type' => 'text/plain', 'Authorization' => 'Bearer secret-token'}
+    )
+    logged = []
+    Rails.logger.stubs(:warn).with { |message| logged << message; true }
+
+    result = subject.send(:download_comments, Octokit::Client.new)
+
+    assert_empty result.items
+    refute result.complete?
+    event = JSON.parse(logged.fetch(0))
+    assert_equal 'issue_comments', event['operation']
+    assert_equal subject.url, event['subject_url']
+    assert_equal 'Octokit::InternalServerError', event['exception']
+    refute_includes logged.first, 'private response body'
+    refute_includes logged.first, 'secret-token'
+  end
+
   test 'issue comment persistence is serialized by the subject lock' do
     subject = create(:subject, url: 'https://api.github.com/repos/octobox/octobox/issues/1')
     remote_comment = stub(
