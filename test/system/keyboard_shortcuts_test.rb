@@ -247,6 +247,25 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     page.current_window.resize_to(1400, 900)
   end
 
+  test 'caret and G move to the preview boundaries like home and end' do
+    page.current_window.resize_to(2400, 900)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#notification-thread', wait: 2
+    add_preview_spacer
+
+    # Sent as shift-chords: Playwright drops a bare 'G' and sends '^' without
+    # the shift modifier a real keyboard sets.
+    send_keys [:shift, 'g']
+    maximum_scroll = page.evaluate_script("document.getElementById('thread').scrollHeight - document.getElementById('thread').clientHeight")
+    assert_in_delta maximum_scroll, preview_scroll_top, 2
+
+    send_keys [:shift, '6']
+    assert_in_delta 0, preview_scroll_top, 2
+  ensure
+    page.current_window.resize_to(1400, 900)
+  end
+
   test 'preview scrolling shortcuts move by full and half pages' do
     open_scrollable_preview
 

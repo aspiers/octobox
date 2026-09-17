@@ -1064,6 +1064,8 @@ var Octobox = (function() {
   var shiftShortcuts = {
     33: scrollThreadHalfPageUp,   // Shift-PageUp
     34: scrollThreadHalfPageDown, // Shift-PageDown
+    54: scrollThreadToTop,        // ^ (Shift-6)
+    71: scrollThreadToBottom,     // G (Shift-g)
     191: openModal,               // ?
   }
 
