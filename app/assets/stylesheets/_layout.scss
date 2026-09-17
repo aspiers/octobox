@@ -53,6 +53,29 @@ body {
   padding-left: 0;
 }
 
+.flex-divider {
+  display: none;
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background-color: $border-color;
+  &:hover, &.is-dragging {
+    background-color: theme-color("primary");
+  }
+}
+
+// The divider is only useful while the preview pane is visible: either
+// because a thread was opened, or because the viewport is wide enough that
+// the pane is always shown (matching the pane's d-xxxl-block).
+.flex-main.show-thread + .flex-divider {
+  display: block;
+}
+
+@include media-breakpoint-up(xxxl) {
+  .flex-divider {
+    display: block;
+  }
+}
+
 .flex-thread {
   flex: 1;
   min-width: 0;
@@ -71,6 +94,17 @@ body {
   img{
     max-width: 100%
   }
+}
+
+// flex-shrink stays enabled so a remembered width from a wider window
+// cannot push the pane off screen.
+.flex-content.thread-resized .flex-thread {
+  flex: 0 1 var(--thread-width);
+}
+
+body.is-resizing-thread {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .nothing-here{
@@ -137,5 +171,12 @@ body {
   @include responsive;
   .flex-main.show-thread{
     display:none;
+  }
+  // The list is hidden while a thread is open, so the pane takes the full width.
+  .flex-divider, .flex-main.show-thread + .flex-divider {
+    display: none;
+  }
+  .flex-content.thread-resized .flex-thread {
+    flex: 1;
   }
 }

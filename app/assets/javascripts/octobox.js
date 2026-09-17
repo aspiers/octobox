@@ -657,12 +657,85 @@ var Octobox = (function() {
     document.documentElement.style.setProperty('--vh', "".concat(vh, "px"));
   };
 
+  var THREAD_WIDTH_KEY = "octobox:thread-width";
+  var MIN_PANE_WIDTH = 200;
+
+  var applyThreadWidth = function(flexContent, width) {
+    flexContent.style.setProperty("--thread-width", width + "px");
+    flexContent.classList.add("thread-resized");
+  };
+
+  var storedThreadWidth = function() {
+    try {
+      var width = parseInt(localStorage.getItem(THREAD_WIDTH_KEY), 10);
+      return width > 0 ? width : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  var rememberThreadWidth = function(width) {
+    try {
+      localStorage.setItem(THREAD_WIDTH_KEY, String(width));
+    } catch (e) {
+      // Private mode or storage disabled: the width still applies for this page.
+    }
+  };
+
+  // Lets the divider between the notification list and the preview pane be
+  // dragged left/right, and remembers the resulting pane width.
+  var initThreadResizer = function() {
+    var divider = document.querySelector(".js-thread-divider");
+    var flexContent = document.querySelector(".flex-content");
+    if (!divider || !flexContent || !DOM.thread) return;
+
+    var stored = storedThreadWidth();
+    if (stored) applyThreadWidth(flexContent, stored);
+
+    // Keep both the list and the pane at least MIN_PANE_WIDTH wide.
+    var clampWidth = function(width) {
+      var flexMain = document.querySelector(".flex-main");
+      var shared = DOM.thread.getBoundingClientRect().width + (flexMain ? flexMain.getBoundingClientRect().width : 0);
+      var max = Math.max(shared - MIN_PANE_WIDTH, MIN_PANE_WIDTH);
+      return Math.min(Math.max(width, MIN_PANE_WIDTH), max);
+    };
+
+    divider.addEventListener("pointerdown", function(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      var startX = event.clientX;
+      var startWidth = DOM.thread.getBoundingClientRect().width;
+      var width = startWidth;
+      divider.setPointerCapture(event.pointerId);
+      divider.classList.add("is-dragging");
+      document.body.classList.add("is-resizing-thread");
+
+      var onMove = function(moveEvent) {
+        // Dragging leftwards widens the preview pane.
+        width = clampWidth(startWidth - (moveEvent.clientX - startX));
+        applyThreadWidth(flexContent, width);
+      };
+      var onEnd = function() {
+        divider.removeEventListener("pointermove", onMove);
+        divider.removeEventListener("pointerup", onEnd);
+        divider.removeEventListener("pointercancel", onEnd);
+        divider.classList.remove("is-dragging");
+        document.body.classList.remove("is-resizing-thread");
+        rememberThreadWidth(Math.round(width));
+      };
+      divider.addEventListener("pointermove", onMove);
+      divider.addEventListener("pointerup", onEnd);
+      divider.addEventListener("pointercancel", onEnd);
+    });
+  };
+
   var initialize = function() {
     enableTooltips();
     enablePopOvers();
 
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
+    initThreadResizer();
 
     // Initialize checkbox functionality - always needed
     initShiftClickCheckboxes();

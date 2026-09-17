@@ -11,6 +11,7 @@
     <%= render "list" %>
   </div>
   <% if display_thread? %>
+    <div class='flex-divider js-thread-divider' role='separator' aria-orientation='vertical' aria-label='Resize preview pane'></div>
     <div id='thread' class='flex-thread d-none d-xxxl-block'>
       <div class="nothing-here text-center align-self-center">
         <%= octicon 'comment-discussion', height: 32, class: 'blankslate-icon' %>
