@@ -657,45 +657,51 @@ var Octobox = (function() {
     document.documentElement.style.setProperty('--vh', "".concat(vh, "px"));
   };
 
-  var THREAD_WIDTH_KEY = "octobox:thread-width";
   var MIN_PANE_WIDTH = 200;
 
-  var applyThreadWidth = function(flexContent, width) {
-    flexContent.style.setProperty("--thread-width", width + "px");
-    flexContent.classList.add("thread-resized");
+  // Each pane that can be resized by dragging the divider next to it.
+  // `sign` is the pane width change per pixel the pointer moves right.
+  var PANE_RESIZERS = [
+    { divider: ".js-sidebar-divider", pane: ".flex-sidebar", storageKey: "octobox:sidebar-width",
+      cssVar: "--sidebar-width", resizedClass: "sidebar-resized", sign: 1 },
+    { divider: ".js-thread-divider", pane: "#thread", storageKey: "octobox:thread-width",
+      cssVar: "--thread-width", resizedClass: "thread-resized", sign: -1 }
+  ];
+
+  var applyPaneWidth = function(flexContent, resizer, width) {
+    flexContent.style.setProperty(resizer.cssVar, width + "px");
+    flexContent.classList.add(resizer.resizedClass);
   };
 
-  var storedThreadWidth = function() {
+  var storedPaneWidth = function(resizer) {
     try {
-      var width = parseInt(localStorage.getItem(THREAD_WIDTH_KEY), 10);
+      var width = parseInt(localStorage.getItem(resizer.storageKey), 10);
       return width > 0 ? width : null;
     } catch (e) {
       return null;
     }
   };
 
-  var rememberThreadWidth = function(width) {
+  var rememberPaneWidth = function(resizer, width) {
     try {
-      localStorage.setItem(THREAD_WIDTH_KEY, String(width));
+      localStorage.setItem(resizer.storageKey, String(width));
     } catch (e) {
       // Private mode or storage disabled: the width still applies for this page.
     }
   };
 
-  // Lets the divider between the notification list and the preview pane be
-  // dragged left/right, and remembers the resulting pane width.
-  var initThreadResizer = function() {
-    var divider = document.querySelector(".js-thread-divider");
-    var flexContent = document.querySelector(".flex-content");
-    if (!divider || !flexContent || !DOM.thread) return;
+  var initPaneResizer = function(flexContent, resizer) {
+    var divider = flexContent.querySelector(resizer.divider);
+    var pane = flexContent.querySelector(resizer.pane);
+    if (!divider || !pane) return;
 
-    var stored = storedThreadWidth();
-    if (stored) applyThreadWidth(flexContent, stored);
+    var stored = storedPaneWidth(resizer);
+    if (stored) applyPaneWidth(flexContent, resizer, stored);
 
-    // Keep both the list and the pane at least MIN_PANE_WIDTH wide.
+    // Keep both the pane and the notification list at least MIN_PANE_WIDTH wide.
     var clampWidth = function(width) {
-      var flexMain = document.querySelector(".flex-main");
-      var shared = DOM.thread.getBoundingClientRect().width + (flexMain ? flexMain.getBoundingClientRect().width : 0);
+      var flexMain = flexContent.querySelector(".flex-main");
+      var shared = pane.getBoundingClientRect().width + (flexMain ? flexMain.getBoundingClientRect().width : 0);
       var max = Math.max(shared - MIN_PANE_WIDTH, MIN_PANE_WIDTH);
       return Math.min(Math.max(width, MIN_PANE_WIDTH), max);
     };
@@ -704,29 +710,36 @@ var Octobox = (function() {
       if (event.button !== 0) return;
       event.preventDefault();
       var startX = event.clientX;
-      var startWidth = DOM.thread.getBoundingClientRect().width;
+      var startWidth = pane.getBoundingClientRect().width;
       var width = startWidth;
       divider.setPointerCapture(event.pointerId);
       divider.classList.add("is-dragging");
-      document.body.classList.add("is-resizing-thread");
+      document.body.classList.add("is-resizing-pane");
 
       var onMove = function(moveEvent) {
-        // Dragging leftwards widens the preview pane.
-        width = clampWidth(startWidth - (moveEvent.clientX - startX));
-        applyThreadWidth(flexContent, width);
+        width = clampWidth(startWidth + resizer.sign * (moveEvent.clientX - startX));
+        applyPaneWidth(flexContent, resizer, width);
       };
       var onEnd = function() {
         divider.removeEventListener("pointermove", onMove);
         divider.removeEventListener("pointerup", onEnd);
         divider.removeEventListener("pointercancel", onEnd);
         divider.classList.remove("is-dragging");
-        document.body.classList.remove("is-resizing-thread");
-        rememberThreadWidth(Math.round(width));
+        document.body.classList.remove("is-resizing-pane");
+        rememberPaneWidth(resizer, Math.round(width));
       };
       divider.addEventListener("pointermove", onMove);
       divider.addEventListener("pointerup", onEnd);
       divider.addEventListener("pointercancel", onEnd);
     });
+  };
+
+  // Lets the dividers beside the sidebar and the preview pane be dragged
+  // left/right, remembering the resulting pane widths.
+  var initPaneResizers = function() {
+    var flexContent = document.querySelector(".flex-content");
+    if (!flexContent) return;
+    PANE_RESIZERS.forEach(function(resizer) { initPaneResizer(flexContent, resizer); });
   };
 
   var initialize = function() {
@@ -735,7 +748,7 @@ var Octobox = (function() {
 
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
-    initThreadResizer();
+    initPaneResizers();
 
     // Initialize checkbox functionality - always needed
     initShiftClickCheckboxes();
