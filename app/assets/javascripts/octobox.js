@@ -1021,12 +1021,12 @@ var Octobox = (function() {
   var shiftShortcuts = {
     33: scrollThreadHalfPageUp,   // Shift-PageUp
     34: scrollThreadHalfPageDown, // Shift-PageDown
-    191: openModal,               // ?
+    68:  markReadSelected, // D
+    191: openModal,        // ?
   }
 
   var shortcuts = {
     65:  checkSelectAll,   // a
-    68:  markReadSelected, // d
     74:  cursorDown,       // j
     75:  cursorUp,         // k
     78:  nextPage,         // n
