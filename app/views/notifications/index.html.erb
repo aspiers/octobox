@@ -7,12 +7,12 @@
   <div class="flex-sidebar">
     <%= render "sidebar" %>
   </div>
-  <div class='flex-divider js-sidebar-divider' role='separator' aria-orientation='vertical' aria-label='Resize sidebar'></div>
+  <%= render 'pane_divider', pane: 'sidebar', label: 'sidebar' %>
   <div class="flex-main">
     <%= render "list" %>
   </div>
   <% if display_thread? %>
-    <div class='flex-divider js-thread-divider' role='separator' aria-orientation='vertical' aria-label='Resize preview pane'></div>
+    <%= render 'pane_divider', pane: 'thread', label: 'preview pane' %>
     <div id='thread' class='flex-thread d-none d-xxxl-block'>
       <div class="nothing-here text-center align-self-center">
         <%= octicon 'comment-discussion', height: 32, class: 'blankslate-icon' %>

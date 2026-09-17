@@ -7,9 +7,11 @@
   <div class="flex-sidebar">
     <%= render "sidebar" %>
   </div>
+  <%= render 'pane_divider', pane: 'sidebar', label: 'sidebar' %>
   <div class="flex-main show-thread">
     <%= render "list" %>
   </div>
+  <%= render 'pane_divider', pane: 'thread', label: 'preview pane' %>
   <div id='thread' class='flex-thread'>
    <%= render 'thread' %>
   </div>

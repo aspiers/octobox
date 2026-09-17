@@ -6,7 +6,7 @@ class PaneResizeTest < ApplicationSystemTestCase
   setup do
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
-    create(:notification, user: @user, subject_title: 'Fix the widget')
+    @notification = create(:notification, user: @user, subject: create(:subject), subject_title: 'Fix the widget')
     sign_in_as(@user)
     # Wide enough that the preview pane, and so its divider, are always shown.
     page.current_window.resize_to(1800, 900)
@@ -70,6 +70,20 @@ class PaneResizeTest < ApplicationSystemTestCase
     drag_divider_by('.js-sidebar-divider', -2000)
 
     assert_in_delta 200, pane_width('.flex-sidebar'), 2
+  end
+
+  test 'the notification page has both dividers and applies remembered widths' do
+    drag_divider_by('.js-sidebar-divider', 80)
+    drag_divider_by('.js-thread-divider', -120)
+    sidebar = pane_width('.flex-sidebar')
+    thread = pane_width('#thread')
+
+    visit "/notifications/#{@notification.id}"
+    assert_selector '#notification-thread'
+    assert_selector '.js-sidebar-divider'
+    assert_selector '.js-thread-divider'
+    assert_in_delta sidebar, pane_width('.flex-sidebar'), 2
+    assert_in_delta thread, pane_width('#thread'), 2
   end
 
   private
