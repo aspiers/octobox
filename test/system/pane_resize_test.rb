@@ -26,7 +26,7 @@ class PaneResizeTest < ApplicationSystemTestCase
     drag_divider_by('.js-thread-divider', -150)
 
     assert_in_delta before + 150, pane_width('#thread'), 2
-    assert_equal pane_width('#thread').round.to_s, stored_width('octobox:thread-width')
+    assert_equal pane_width('#thread').round.to_s, stored_width('octobox:pane-width:thread')
 
     visit current_path
     assert_selector '.js-thread-divider'
@@ -57,7 +57,7 @@ class PaneResizeTest < ApplicationSystemTestCase
     drag_divider_by('.js-sidebar-divider', 100)
 
     assert_in_delta before + 100, pane_width('.flex-sidebar'), 2
-    assert_equal pane_width('.flex-sidebar').round.to_s, stored_width('octobox:sidebar-width')
+    assert_equal pane_width('.flex-sidebar').round.to_s, stored_width('octobox:pane-width:sidebar')
 
     visit current_path
     assert_selector '.js-sidebar-divider'
@@ -84,6 +84,23 @@ class PaneResizeTest < ApplicationSystemTestCase
     assert_selector '.js-thread-divider'
     assert_in_delta sidebar, pane_width('.flex-sidebar'), 2
     assert_in_delta thread, pane_width('#thread'), 2
+  end
+
+  test 'remembered widths are applied before the page scripts run' do
+    drag_divider_by('.js-sidebar-divider', 80)
+    sidebar = pane_width('.flex-sidebar')
+
+    page.driver.with_playwright_page do |pw|
+      pw.add_init_script(script: <<~JS)
+        document.addEventListener('DOMContentLoaded', function() {
+          window.sidebarWidthAtDomReady = document.querySelector('.flex-sidebar').getBoundingClientRect().width;
+        });
+      JS
+    end
+    visit current_path
+    assert_selector '.js-sidebar-divider'
+
+    assert_in_delta sidebar, page.evaluate_script('window.sidebarWidthAtDomReady'), 2
   end
 
   private

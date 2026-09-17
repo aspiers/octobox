@@ -26,6 +26,20 @@
       <script>window.bugsnagClient = bugsnag({ apiKey: '<%= Octobox.config.bugsnag_js_api_key %>', releaseStage: '<%= ENV["RAILS_ENV"] %>' })</script>
     <% end %>
 
+    <%# Restore remembered pane widths before first paint; see PANE_RESIZERS in octobox.js. %>
+    <script>
+      (function() {
+        try {
+          ["sidebar", "thread"].forEach(function(name) {
+            var width = parseInt(localStorage.getItem("octobox:pane-width:" + name), 10);
+            if (width > 0) {
+              document.documentElement.style.setProperty("--" + name + "-width", width + "px");
+              document.documentElement.classList.add(name + "-resized");
+            }
+          });
+        } catch (e) {}
+      })();
+    </script>
     <%= stylesheet_link_tag  current_theme, media: 'all', 'data-turbolinks-track': 'reload' %>
     <%= javascript_include_tag 'application', 'data-turbolinks-track': 'reload', defer: true %>
 

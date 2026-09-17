@@ -83,7 +83,7 @@ body {
 
 // flex-shrink stays enabled so a remembered width from a wider window
 // cannot push the pane off screen.
-.flex-content.sidebar-resized .flex-sidebar {
+html.sidebar-resized .flex-sidebar {
   flex: 0 1 var(--sidebar-width);
   width: var(--sidebar-width);
 }
@@ -125,7 +125,7 @@ body {
   }
 }
 
-.flex-content.thread-resized .flex-thread {
+html.thread-resized .flex-thread {
   flex: 0 1 var(--thread-width);
 }
 
@@ -204,10 +204,10 @@ body.is-resizing-pane {
   .flex-divider, .flex-main.show-thread + .js-thread-divider {
     display: none;
   }
-  .flex-content.sidebar-resized .flex-sidebar {
+  html.sidebar-resized .flex-sidebar {
     width: $sidebar-width;
   }
-  .flex-content.thread-resized .flex-thread {
+  html.thread-resized .flex-thread {
     flex: 1;
   }
 }

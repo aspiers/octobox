@@ -661,21 +661,24 @@ var Octobox = (function() {
 
   // Each pane that can be resized by dragging the divider next to it.
   // `sign` is the pane width change per pixel the pointer moves right.
+  // The width lives on <html> as --<name>-width plus a <name>-resized class,
+  // so the inline script in the layout head can restore it before first
+  // paint and Turbolinks keeps it across visits.
   var PANE_RESIZERS = [
-    { divider: ".js-sidebar-divider", pane: ".flex-sidebar", storageKey: "octobox:sidebar-width",
-      cssVar: "--sidebar-width", resizedClass: "sidebar-resized", sign: 1 },
-    { divider: ".js-thread-divider", pane: "#thread", storageKey: "octobox:thread-width",
-      cssVar: "--thread-width", resizedClass: "thread-resized", sign: -1 }
+    { name: "sidebar", divider: ".js-sidebar-divider", pane: ".flex-sidebar", sign: 1 },
+    { name: "thread", divider: ".js-thread-divider", pane: "#thread", sign: -1 }
   ];
 
-  var applyPaneWidth = function(flexContent, resizer, width) {
-    flexContent.style.setProperty(resizer.cssVar, width + "px");
-    flexContent.classList.add(resizer.resizedClass);
+  var paneStorageKey = function(resizer) { return "octobox:pane-width:" + resizer.name; };
+
+  var applyPaneWidth = function(resizer, width) {
+    document.documentElement.style.setProperty("--" + resizer.name + "-width", width + "px");
+    document.documentElement.classList.add(resizer.name + "-resized");
   };
 
   var storedPaneWidth = function(resizer) {
     try {
-      var width = parseInt(localStorage.getItem(resizer.storageKey), 10);
+      var width = parseInt(localStorage.getItem(paneStorageKey(resizer)), 10);
       return width > 0 ? width : null;
     } catch (e) {
       return null;
@@ -684,7 +687,7 @@ var Octobox = (function() {
 
   var rememberPaneWidth = function(resizer, width) {
     try {
-      localStorage.setItem(resizer.storageKey, String(width));
+      localStorage.setItem(paneStorageKey(resizer), String(width));
     } catch (e) {
       // Private mode or storage disabled: the width still applies for this page.
     }
@@ -696,7 +699,7 @@ var Octobox = (function() {
     if (!divider || !pane) return;
 
     var stored = storedPaneWidth(resizer);
-    if (stored) applyPaneWidth(flexContent, resizer, stored);
+    if (stored) applyPaneWidth(resizer, stored);
 
     // Keep both the pane and the notification list at least MIN_PANE_WIDTH wide.
     var clampWidth = function(width) {
@@ -718,7 +721,7 @@ var Octobox = (function() {
 
       var onMove = function(moveEvent) {
         width = clampWidth(startWidth + resizer.sign * (moveEvent.clientX - startX));
-        applyPaneWidth(flexContent, resizer, width);
+        applyPaneWidth(resizer, width);
       };
       var onEnd = function() {
         divider.removeEventListener("pointermove", onMove);
