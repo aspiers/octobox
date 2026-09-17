@@ -207,6 +207,10 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :backspace
     assert_in_delta preview_height, preview_scroll_top, 2
 
+    set_preview_scroll_top(preview_height * 2)
+    send_keys 'b'
+    assert_in_delta preview_height, preview_scroll_top, 2
+
     set_preview_scroll_top(0)
     send_keys :shift, :page_down
     assert_in_delta preview_height / 2.0, preview_scroll_top, 2
