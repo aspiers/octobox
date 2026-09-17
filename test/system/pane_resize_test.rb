@@ -26,7 +26,7 @@ class PaneResizeTest < ApplicationSystemTestCase
     drag_divider_by('.js-thread-divider', -150)
 
     assert_in_delta before + 150, pane_width('#thread'), 2
-    assert_equal pane_width('#thread').round.to_s, stored_width('octobox:pane-width:thread')
+    assert_in_delta percent_of_layout(pane_width('#thread')), stored_width('octobox:pane-width:thread').to_f, 0.1
 
     visit current_path
     assert_selector '.js-thread-divider'
@@ -57,7 +57,7 @@ class PaneResizeTest < ApplicationSystemTestCase
     drag_divider_by('.js-sidebar-divider', 100)
 
     assert_in_delta before + 100, pane_width('.flex-sidebar'), 2
-    assert_equal pane_width('.flex-sidebar').round.to_s, stored_width('octobox:pane-width:sidebar')
+    assert_in_delta percent_of_layout(pane_width('.flex-sidebar')), stored_width('octobox:pane-width:sidebar').to_f, 0.1
 
     visit current_path
     assert_selector '.js-sidebar-divider'
@@ -103,10 +103,34 @@ class PaneResizeTest < ApplicationSystemTestCase
     assert_in_delta sidebar, page.evaluate_script('window.sidebarWidthAtDomReady'), 2
   end
 
+  test 'panes keep their share of the width when the window size changes' do
+    drag_divider_by('.js-sidebar-divider', 100)
+    drag_divider_by('.js-thread-divider', -150)
+    sidebar_share = pane_width('.flex-sidebar') / layout_width
+    thread_share = pane_width('#thread') / layout_width
+
+    page.current_window.resize_to(2400, 900)
+    visit current_path
+    assert_selector '.js-thread-divider'
+
+    assert_in_delta sidebar_share, pane_width('.flex-sidebar') / layout_width, 0.005
+    assert_in_delta thread_share, pane_width('#thread') / layout_width, 0.005
+    assert_operator pane_width('.flex-sidebar'), :>, 300
+  end
+
   private
 
+  def layout_width
+    pane_width('.flex-content')
+  end
+
+  def percent_of_layout(width)
+    width / layout_width * 100
+  end
+
   def pane_width(selector)
-    page.evaluate_script("document.querySelector('#{selector}').getBoundingClientRect().width")
+    # to_f: whole-pixel widths come back as Integers, which would divide as integers.
+    page.evaluate_script("document.querySelector('#{selector}').getBoundingClientRect().width").to_f
   end
 
   def stored_width(key)

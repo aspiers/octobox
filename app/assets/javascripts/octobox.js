@@ -671,24 +671,26 @@ var Octobox = (function() {
 
   var paneStorageKey = function(resizer) { return "octobox:pane-width:" + resizer.name; };
 
-  var applyPaneWidth = function(resizer, width) {
-    document.documentElement.style.setProperty("--" + resizer.name + "-width", width + "px");
+  // Widths are kept as a percentage of the layout width so the panes keep
+  // their proportions when the page is reloaded in a different window size.
+  var applyPanePercent = function(resizer, percent) {
+    document.documentElement.style.setProperty("--" + resizer.name + "-width", percent + "%");
     document.documentElement.classList.add(resizer.name + "-resized");
   };
 
-  var storedPaneWidth = function(resizer) {
+  var storedPanePercent = function(resizer) {
     try {
-      var width = parseInt(localStorage.getItem(paneStorageKey(resizer)), 10);
-      return width > 0 ? width : null;
-    } catch (e) {
+      var percent = parseFloat(localStorage.getItem(paneStorageKey(resizer)));
+      return percent > 0 && percent < 100 ? percent : null;
+    } catch {
       return null;
     }
   };
 
-  var rememberPaneWidth = function(resizer, width) {
+  var rememberPanePercent = function(resizer, percent) {
     try {
-      localStorage.setItem(paneStorageKey(resizer), String(width));
-    } catch (e) {
+      localStorage.setItem(paneStorageKey(resizer), percent.toFixed(2));
+    } catch {
       // Private mode or storage disabled: the width still applies for this page.
     }
   };
@@ -698,8 +700,10 @@ var Octobox = (function() {
     var pane = flexContent.querySelector(resizer.pane);
     if (!divider || !pane) return;
 
-    var stored = storedPaneWidth(resizer);
-    if (stored) applyPaneWidth(resizer, stored);
+    var stored = storedPanePercent(resizer);
+    if (stored) applyPanePercent(resizer, stored);
+
+    var toPercent = function(width) { return width / flexContent.clientWidth * 100; };
 
     // Keep both the pane and the notification list at least MIN_PANE_WIDTH wide.
     var clampWidth = function(width) {
@@ -714,14 +718,14 @@ var Octobox = (function() {
       event.preventDefault();
       var startX = event.clientX;
       var startWidth = pane.getBoundingClientRect().width;
-      var width = startWidth;
+      var percent = toPercent(startWidth);
       divider.setPointerCapture(event.pointerId);
       divider.classList.add("is-dragging");
       document.body.classList.add("is-resizing-pane");
 
       var onMove = function(moveEvent) {
-        width = clampWidth(startWidth + resizer.sign * (moveEvent.clientX - startX));
-        applyPaneWidth(resizer, width);
+        percent = toPercent(clampWidth(startWidth + resizer.sign * (moveEvent.clientX - startX)));
+        applyPanePercent(resizer, percent);
       };
       var onEnd = function() {
         divider.removeEventListener("pointermove", onMove);
@@ -729,7 +733,7 @@ var Octobox = (function() {
         divider.removeEventListener("pointercancel", onEnd);
         divider.classList.remove("is-dragging");
         document.body.classList.remove("is-resizing-pane");
-        rememberPaneWidth(resizer, Math.round(width));
+        rememberPanePercent(resizer, percent);
       };
       divider.addEventListener("pointermove", onMove);
       divider.addEventListener("pointerup", onEnd);

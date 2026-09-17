@@ -31,9 +31,9 @@
       (function() {
         try {
           ["sidebar", "thread"].forEach(function(name) {
-            var width = parseInt(localStorage.getItem("octobox:pane-width:" + name), 10);
-            if (width > 0) {
-              document.documentElement.style.setProperty("--" + name + "-width", width + "px");
+            var percent = parseFloat(localStorage.getItem("octobox:pane-width:" + name));
+            if (percent > 0 && percent < 100) {
+              document.documentElement.style.setProperty("--" + name + "-width", percent + "%");
               document.documentElement.classList.add(name + "-resized");
             }
           });
