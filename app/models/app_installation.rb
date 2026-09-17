@@ -43,6 +43,10 @@ class AppInstallation < ApplicationRecord
     "#{Octobox.config.github_domain}/#{account_login}.png"
   end
 
+  def all_repositories?
+    repository_selection == 'all'
+  end
+
   def private_repositories_enabled?
     return true unless Octobox.io?
     subscription_purchase.try(:private_repositories_enabled?)
@@ -91,6 +95,7 @@ class AppInstallation < ApplicationRecord
       account_type: remote_installation['account']['type'],
       target_type: remote_installation['target_type'],
       target_id: remote_installation['target_id'],
+      repository_selection: remote_installation['repository_selection'],
       permission_pull_requests: remote_installation['permissions']['pull_requests'],
       permission_issues: remote_installation['permissions']['issues'],
       permission_statuses: remote_installation['permissions']['statuses']

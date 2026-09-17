@@ -38,6 +38,21 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_template 'users/edit'
   end
 
+  test 'settings page says All repos for installations covering every repository' do
+    Octobox.config.stubs(:github_app).returns(true)
+    all_repos = create(:app_installation, account_login: 'everything', account_type: 'Organization', repository_selection: 'all')
+    selected = create(:app_installation, account_login: 'some', account_type: 'Organization', repository_selection: 'selected')
+    create(:repository, app_installation: selected)
+    [all_repos, selected].each { |installation| @user.app_installation_permissions.create!(app_installation: installation) }
+    sign_in_as(@user)
+
+    get settings_path
+
+    assert_response :success
+    assert_select 'td', text: 'All repos', count: 1
+    assert_select 'td', text: '1 repo', count: 1
+  end
+
   test 'displays settings page with saved search' do
     sign_in_as(@user)
     create(:pinned_search, user: @user)

@@ -39,4 +39,16 @@ class AppInstallationTest < ActiveSupport::TestCase
     assert_equal large_github_id, app_installation.account_id
     assert_equal large_github_id, app_installation.target_id
   end
+
+  test 'map_from_api records the repository selection' do
+    remote_installation = JSON.parse(File.read(Rails.root.join('test/fixtures/files/app_installation.json')))
+
+    assert_equal 'selected', AppInstallation.map_from_api(remote_installation)[:repository_selection]
+  end
+
+  test 'all_repositories? is true only for installations covering every repository' do
+    assert AppInstallation.new(repository_selection: 'all').all_repositories?
+    refute AppInstallation.new(repository_selection: 'selected').all_repositories?
+    refute AppInstallation.new.all_repositories?
+  end
 end
