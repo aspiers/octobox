@@ -22,6 +22,7 @@ module NotificationsHelper
     'PullRequest'                  => 'git-pull-request',
     'Commit'                       => 'git-commit',
     'Release'                      => 'tag',
+    'Discussion'                   => 'comment-discussion',
     'RepositoryVulnerabilityAlert' => 'alert'
   }.freeze
 
@@ -330,7 +331,7 @@ module NotificationsHelper
   end
 
   def subject_with_number(notification)
-    if ['Issue', 'PullRequest'].include?(notification.subject_type)
+    if ['Issue', 'PullRequest', 'Discussion'].include?(notification.subject_type)
       capture do
         concat content_tag(:span, "##{notification.subject_number}", class: "notification-number")
         concat " "

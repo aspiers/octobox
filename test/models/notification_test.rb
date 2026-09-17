@@ -266,6 +266,36 @@ class NotificationTest < ActiveSupport::TestCase
     assert_equal 'failure', subject.status
   end
 
+  test 'update_subject_in_foreground syncs a discussion and its comments' do
+    stub_fetch_subject_enabled
+    Octobox.config.stubs(:include_comments).returns(true)
+    url = 'https://api.github.com/repos/ente/ente/discussions/779'
+    headers = { 'Content-Type' => 'application/json' }
+    stub_request(:get, url).to_return(status: 200, body: file_fixture('discussion.json'), headers: headers)
+    stub_request(:get, %r{\A#{Regexp.escape(url)}/comments\?}).to_return(status: 200, body: file_fixture('discussion_comments.json'), headers: headers)
+
+    notification = create(:notification, user: create(:user), subject_type: 'Discussion', subject_url: url)
+    notification.update_subject_in_foreground(true)
+
+    subject = notification.reload.subject
+    refute_nil subject
+    assert_equal url, subject.url
+    assert_equal 'https://github.com/ente/ente/discussions/779', subject.html_url
+    assert_equal 'open', subject.state
+    assert_equal %w[mobile photos], subject.labels.map(&:name).sort
+    assert_equal 2, subject.comments.count
+    assert_equal 'https://github.com/ente/ente/discussions/779#discussioncomment-13082509',
+                 subject.comments.order(:github_id).first.web_url
+  end
+
+  test 'subjectable scope includes discussions' do
+    notification = create(:notification, subject_type: 'Discussion')
+
+    assert_equal [notification], Notification.subjectable.to_a
+    assert_equal [notification], Notification.commentable.to_a
+    assert_equal [notification], Notification.labelable.to_a
+  end
+
   test 'subjectable scope returns only notifications that can have subjects' do
     notification1 = create(:notification, subject_type: 'Issue')
     notification2 = create(:notification, subject_type: 'RepositoryVulnerabilityAlert')

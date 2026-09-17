@@ -71,6 +71,10 @@ module Octobox
       /\/releases\// =~ url
     end
 
+    def discussion?
+      /\/discussions\// =~ url
+    end
+
     private
 
     def comment_id

@@ -5,7 +5,8 @@ module Octobox
 
       SUBJECT_TYPE_ISSUE_REQUEST = ['Issue', 'PullRequest'].freeze
       SUBJECT_TYPE_COMMIT_RELEASE = ['Commit', 'Release'].freeze
-      SUBJECT_TYPE_COMMENTS = SUBJECT_TYPE_ISSUE_REQUEST + ['Commit']
+      SUBJECT_TYPE_DISCUSSION = ['Discussion'].freeze
+      SUBJECT_TYPE_COMMENTS = SUBJECT_TYPE_ISSUE_REQUEST + SUBJECT_TYPE_DISCUSSION + ['Commit']
 
       def update_subject(force = false)
         return unless download_subject?
@@ -23,7 +24,7 @@ module Octobox
         remote_subject = download_subject(client)
         return unless remote_subject.present?
 
-        Subject.sync(remote_subject.to_h.as_json, github_client: client)
+        Subject.sync(remote_subject.to_h.as_json, github_client: client, url: subject_url)
       end
 
       def github_client

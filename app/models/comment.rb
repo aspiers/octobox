@@ -6,7 +6,8 @@ class Comment < ApplicationRecord
   BOT_AUTHOR_REGEX = /\A(.*)\[bot\]\z/.freeze
 
   def web_url
-    "#{subject.html_url}#issuecomment-#{github_id}"
+    anchor = subject.discussion? ? 'discussioncomment' : 'issuecomment'
+    "#{subject.html_url}##{anchor}-#{github_id}"
   end
 
   def author_url_path

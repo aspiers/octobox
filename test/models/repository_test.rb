@@ -108,4 +108,17 @@ class RepositoryTest < ActiveSupport::TestCase
 
     repository.sync_subjects_in_foreground
   end
+
+  test 'sync_subjects_in_foreground keys url-less discussion subjects on the notification subject_url' do
+    stub_background_jobs_enabled
+    url = 'https://api.github.com/repos/ente/ente/discussions/779'
+    stub_request(:get, url).to_return(status: 200, body: file_fixture('discussion.json'), headers: { 'Content-Type' => 'application/json' })
+    notification = create(:notification, subject_type: 'Discussion', subject_url: url)
+    repository = notification.repository
+    repository.stubs(:app_installation).returns(stub(github_client: Octokit::Client.new))
+
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(has_entry('url' => url))
+
+    repository.sync_subjects_in_foreground
+  end
 end

@@ -25,7 +25,7 @@ module Octobox
             joins(:subject).where.not('subjects.author LIKE ? OR subjects.author LIKE ?', '%[bot]', '%-bot')
           end
         }
-        scope :labelable,  -> { where(subject_type: ['Issue', 'PullRequest']) }
+        scope :labelable,  -> { where(subject_type: ['Issue', 'PullRequest', 'Discussion']) }
         scope :is_private, ->(is_private = true) { joins(:repository).where('repositories.private = ?', is_private) }
         scope :unlabelled, -> { labelable.with_subject.left_outer_joins(:labels).where(labels: {id: nil})}
         scope :with_subject,-> { includes(:subject).where.not(subjects: { url: nil }) }

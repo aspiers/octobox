@@ -93,6 +93,26 @@ class SubjectTest < ActiveSupport::TestCase
     assert_equal 2, subject.comment_count
   end
 
+  test 'sync updates comment_count of a discussion' do
+    remote_subject = load_fixture('discussion.json')
+    subject = create(:subject)
+    subject.sync(remote_subject)
+    assert_equal 14, subject.comment_count
+  end
+
+  test 'self.sync keys a url-less discussion on the given url' do
+    remote_subject = load_fixture('discussion.json')
+    url = 'https://api.github.com/repos/ente/ente/discussions/779'
+
+    Subject.sync(remote_subject, url: url)
+
+    subject = Subject.find_by(url: url)
+    refute_nil subject
+    assert subject.discussion?
+    assert_equal 'ente/ente', subject.repository_full_name
+    assert_equal 'Ultra HDR support', subject.title
+  end
+
   test 'sync updates body of an issue' do
     remote_subject = load_fixture('subject_56.json')
     subject = create(:subject)
