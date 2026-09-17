@@ -31,7 +31,9 @@ class LifecycleEventsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select '.lifecycle-events h3', count: 0
     assert_select '.lifecycle-event[data-preview-entry]', count: 11
-    assert_select '[data-event-type="closed"]', text: /closed this pull request.*via commit 1111111/m
+    assert_select '[data-event-type="closed"]', text: /closed this pull request\s+as not planned\s+via commit 1111111/m
+    assert_select '.lifecycle-events[data-refresh-pending]', count: 0
+    assert_select '.lifecycle-events-pending', count: 0
     assert_select '[data-event-type="committed"]', text: /Mona Lisa.*committed 2222222.*Keep lifecycle history/m
     assert_select '[data-event-type="labeled"]', count: 0
     assert_select 'a[href="https://github.com/octobox/octobox/commit/1111111111111111111111111111111111111111"]'
@@ -204,6 +206,59 @@ class LifecycleEventsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select '.lifecycle-event', count: 1
     refute_includes response.body, 'unsupported-comment'
+  end
+
+  test 'marks the section pending until the background refresh produces a snapshot' do
+    stub_background_jobs_enabled(value: true)
+
+    get notification_path(@notification), xhr: true
+
+    assert_response :success
+    assert_select '.lifecycle-events[data-preview-section="lifecycle-events"][data-refresh-pending="true"]' do
+      assert_select "[data-refresh-url=\"#{notification_path(@notification)}\"]"
+      assert_select '.lifecycle-events-pending', text: /Checking GitHub for activity/
+      assert_select 'h3', count: 0
+    end
+    assert_equal 1, RefreshLifecycleEventsWorker.jobs.size
+  end
+
+  test 'keeps the section pending while a snapshot is still refreshing' do
+    stub_background_jobs_enabled(value: true)
+    create(:lifecycle_event_snapshot, subject: @subject, status: 'refreshing', refreshed_at: nil)
+
+    get notification_path(@notification), xhr: true
+
+    assert_response :success
+    assert_select '.lifecycle-events[data-refresh-pending="true"][data-status="refreshing"]'
+  end
+
+  test 'renders nothing once a refresh completes without lifecycle events' do
+    create(:lifecycle_event_snapshot, subject: @subject, total_count: 0)
+
+    get notification_path(@notification), xhr: true
+
+    assert_response :success
+    assert_select '.lifecycle-events', count: 0
+  end
+
+  test 'renders the section when expanding comments' do
+    snapshot = create(:lifecycle_event_snapshot, subject: @subject, refreshed_at: 1.minute.ago)
+    create(:lifecycle_event, lifecycle_event_snapshot: snapshot, state_reason: 'completed')
+
+    get expand_comments_notification_path(@notification)
+
+    assert_response :success
+    assert_select '[data-event-type="closed"]', text: /closed this pull request\s+as completed/m
+  end
+
+  test 'links app actors to their GitHub app page' do
+    snapshot = create(:lifecycle_event_snapshot, subject: @subject, refreshed_at: 1.minute.ago)
+    create(:lifecycle_event, lifecycle_event_snapshot: snapshot, actor_login: 'linear-code[bot]')
+
+    get notification_path(@notification)
+
+    assert_response :success
+    assert_select '.lifecycle-event a[href="https://github.com/apps/linear-code"]', text: 'linear-code[bot]'
   end
 
   private

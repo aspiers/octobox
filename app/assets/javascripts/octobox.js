@@ -694,9 +694,63 @@ var Octobox = (function() {
           .then(data => {
             var thread = document.getElementById('thread');
             if (thread) thread.innerHTML = data;
+            refreshPendingPreviewSections();
           });
       }
     };
+
+    refreshPendingPreviewSections();
+  };
+
+  var PREVIEW_REFRESH_INTERVAL_MS = 2000;
+  var PREVIEW_REFRESH_MAX_ATTEMPTS = 15;
+
+  var pendingPreviewSections = function() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('#thread [data-preview-section][data-refresh-pending]')
+    );
+  };
+
+  // Preview sections fetched in the background render a pending marker on
+  // the first view, before their data exists. Re-fetch the thread until the
+  // marker clears so that view still ends up showing the activity.
+  var refreshPendingPreviewSections = function(attempt) {
+    attempt = attempt || 0;
+    var sections = pendingPreviewSections();
+    if (!sections.length) return;
+    if (attempt >= PREVIEW_REFRESH_MAX_ATTEMPTS) {
+      sections.forEach(function(section) {
+        section.querySelectorAll('.preview-section-pending').forEach(function(note) { note.remove(); });
+      });
+      return;
+    }
+    var url = sections[0].dataset.refreshUrl;
+
+    setTimeout(function() {
+      var current = pendingPreviewSections();
+      // The user may have moved to another notification meanwhile.
+      if (!current.length || current[0].dataset.refreshUrl !== url) return;
+
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(response) {
+          if (!response.ok) throw new Error('Request failed');
+          return response.text();
+        })
+        .then(function(html) {
+          var fresh = new DOMParser().parseFromString(html, 'text/html');
+          current.forEach(function(section) {
+            if (!document.contains(section)) return;
+            // Lifecycle rows share ordering and pagination with comments.
+            var conversation = section.closest('.notification-conversation');
+            var selector = conversation ? '.notification-conversation' :
+              '[data-preview-section="' + section.dataset.previewSection + '"]';
+            var replacement = fresh.querySelector(selector);
+            if (replacement) (conversation || section).replaceWith(replacement);
+          });
+        })
+        .catch(function() {})
+        .then(function() { refreshPendingPreviewSections(attempt + 1); });
+    }, PREVIEW_REFRESH_INTERVAL_MS);
   };
 
   var deleteNotifications = function(ids){
@@ -763,6 +817,7 @@ var Octobox = (function() {
         } else {
           var thread = document.getElementById('thread');
           if (thread) thread.innerHTML = data;
+          refreshPendingPreviewSections();
         }
       });
 

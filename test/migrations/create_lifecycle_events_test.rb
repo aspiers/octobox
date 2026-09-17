@@ -2,10 +2,19 @@
 
 require 'test_helper'
 require Rails.root.join('db/migrate/20260831000000_create_lifecycle_events')
+require Rails.root.join('db/migrate/20260917000000_add_state_reason_to_lifecycle_events')
 
 class CreateLifecycleEventsTest < ActiveSupport::TestCase
   test 'uses Rails 7.1 migration compatibility' do
     assert_equal ActiveRecord::Migration[7.1], CreateLifecycleEvents.superclass
+  end
+
+  test 'adds a nullable state_reason column to lifecycle events' do
+    assert_equal ActiveRecord::Migration[7.1], AddStateReasonToLifecycleEvents.superclass
+    column = ActiveRecord::Base.connection.columns(:lifecycle_events).find { |c| c.name == 'state_reason' }
+
+    assert_equal :string, column.type
+    assert column.null
   end
 
   test 'creates only the lifecycle snapshot and event tables' do

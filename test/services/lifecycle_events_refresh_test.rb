@@ -39,6 +39,8 @@ class LifecycleEventsRefreshTest < ActiveSupport::TestCase
     assert_equal 'octocat', closed.actor_login
     assert_equal '1111111111111111111111111111111111111111', closed.commit_sha
     assert_equal 'github:LE_closed_8101', closed.github_identity
+    assert_equal 'not_planned', closed.state_reason
+    assert_nil result.snapshot.lifecycle_events.find_by!(event_type: 'reopened').state_reason
 
     force_push = result.snapshot.lifecycle_events.find_by!(event_type: 'head_ref_force_pushed')
     assert_equal '3333333333333333333333333333333333333333', force_push.before_commit_sha

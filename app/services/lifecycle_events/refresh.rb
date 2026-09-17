@@ -141,6 +141,7 @@ module LifecycleEvents
         previous_ref_name: event['previous_ref'] || event.dig('rename', 'from'),
         current_ref_name: event['current_ref'] || event.dig('rename', 'to'),
         commit_message: event['message'],
+        state_reason: state_reason_for(event),
         github_event_id: integer_id(event['id'])
       }
       attributes[:github_identity] = identity_for(event, attributes)
@@ -151,6 +152,13 @@ module LifecycleEvents
       event.dig('actor', 'login') ||
         event.dig('author', 'login') || event.dig('author', 'name') ||
         event.dig('committer', 'login') || event.dig('committer', 'name')
+    end
+
+    # GitHub only sets state_reason on closed events, and often leaves it
+    # null even for issues closed as completed.
+    def state_reason_for(event)
+      reason = event['state_reason']
+      reason.to_s.first(LifecycleEvent::STATE_REASON_LIMIT) if event['event'] == 'closed' && reason.present?
     end
 
     def commit_sha_from(commit)

@@ -441,11 +441,29 @@ module NotificationsHelper
     Octobox.include_comments? && current_user.display_comments
   end
 
-  def lifecycle_event_actor(event)
-    actor = event.actor_login.presence || 'Someone'
-    return actor unless actor.match?(/\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\z/)
+  GITHUB_LOGIN_PATTERN = /\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\z/
+  GITHUB_APP_ACTOR_PATTERN = /\A(?<slug>[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\[bot\]\z/
 
-    link_to actor, "#{Octobox.config.github_domain}/#{actor}", class: 'text-muted', target: '_blank', rel: 'noopener'
+  def lifecycle_event_actor(event)
+    actor = event.actor_login.presence
+    return 'Someone' unless actor
+    return lifecycle_actor_link(actor, actor) if actor.match?(GITHUB_LOGIN_PATTERN)
+
+    # Apps act as "<slug>[bot]", which has no user page; GitHub links them to the app listing.
+    app = actor.match(GITHUB_APP_ACTOR_PATTERN)
+    return actor unless app
+
+    lifecycle_actor_link(actor, "apps/#{app[:slug]}")
+  end
+
+  def lifecycle_actor_link(actor, path)
+    link_to actor, "#{Octobox.config.github_domain}/#{path}", class: 'text-muted', target: '_blank', rel: 'noopener'
+  end
+
+  # The first preview of a subject renders before its background refresh has
+  # produced a snapshot; the client polls while this holds.
+  def lifecycle_events_pending?(snapshot)
+    snapshot.nil? || snapshot.status == 'refreshing'
   end
 
   def lifecycle_event_commit_link(event, sha = event.commit_sha)

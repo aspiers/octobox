@@ -59,7 +59,7 @@
         <% end %>
         <div class="notification-conversation">
           <%= render 'notifications/lifecycle_events',
-                     snapshot: @lifecycle_event_snapshot if @lifecycle_event_snapshot %>
+                     snapshot: @lifecycle_event_snapshot if @notification.subject.issue_or_pull_request? %>
 
           <% if @comments_left_to_load > 0 %>
             <div id='more-comments'>

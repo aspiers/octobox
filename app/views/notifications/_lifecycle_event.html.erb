@@ -3,6 +3,9 @@
   <% case event.event_type %>
   <% when 'closed' %>
     closed this <%= @notification.subject_type.underscore.humanize.downcase %>
+    <% if event.state_reason_label.present? %>
+      as <%= event.state_reason_label %>
+    <% end %>
     <% if event.commit_sha.present? %>
       via commit <%= lifecycle_event_commit_link(event) || event.short_commit_sha %>
     <% end %>

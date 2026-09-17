@@ -6,6 +6,7 @@
     "actor": { "login": "octocat" },
     "commit_id": "1111111111111111111111111111111111111111",
     "commit_url": "https://api.github.com/repos/octobox/octobox/commits/1111111111111111111111111111111111111111",
+    "state_reason": "not_planned",
     "created_at": "2026-08-01T09:00:00Z"
   },
   {

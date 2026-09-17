@@ -14,6 +14,7 @@ class LifecycleEvent < ApplicationRecord
     base_ref_force_pushed
     base_ref_changed
   ].freeze
+  STATE_REASON_LIMIT = 64
 
   belongs_to :lifecycle_event_snapshot
 
@@ -25,6 +26,10 @@ class LifecycleEvent < ApplicationRecord
 
   def self.latest_chronologically(limit = 50)
     order(occurred_at: :desc, github_identity: :desc).limit(limit).to_a.reverse
+  end
+
+  def state_reason_label
+    state_reason&.tr('_', ' ')
   end
 
   def short_commit_sha
