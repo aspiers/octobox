@@ -194,7 +194,8 @@ class PullRequestReviewSync
         review_github_id: value(remote_comment, :pull_request_review_id),
         reply_to_github_id: value(remote_comment, :in_reply_to_id),
         thread_github_node_id: graphql_context&.fetch(:thread_id) || comment.thread_github_node_id,
-        review_context: context
+        review_context: context,
+        reactions: ReactionSummary.from(remote_comment)
       }
       assign_remote_attributes(comment, attributes)
       next unless comment.changed?

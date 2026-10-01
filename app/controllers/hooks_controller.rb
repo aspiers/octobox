@@ -5,8 +5,17 @@ class HooksController < ApplicationController
 
   def create
     case event_header
-    when 'issues', 'issue_comment'
+    when 'issues'
       SyncSubjectWorker.perform_async_if_configured(payload['issue'])
+    when 'issue_comment'
+      SyncSubjectWorker.perform_async_if_configured(
+        payload['issue'],
+        {
+          'comment' => payload['comment'],
+          'action' => payload['action'],
+          'repository_id' => payload.dig('repository', 'id')
+        }
+      )
     when 'pull_request'
       SyncSubjectWorker.perform_async_if_configured(payload['pull_request'])
     when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'

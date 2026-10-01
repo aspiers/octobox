@@ -39,6 +39,10 @@ class Comment < ApplicationRecord
     self[:review_context] || {}
   end
 
+  def reaction_counts
+    ReactionSummary.valid_counts(reactions)
+  end
+
   def author_url_path
     if bot_author?
       "/apps/#{BOT_AUTHOR_REGEX.match(author)[1]}"
@@ -76,7 +80,7 @@ class Comment < ApplicationRecord
   end
 
   def pushable_fields
-    ['body', 'github_id']
+    ['body', 'github_id', 'reactions']
   end
 
 end

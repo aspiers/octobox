@@ -46,7 +46,7 @@ class Subject < ApplicationRecord
 
   def sync(remote_subject, github_client: nil)
     @preferred_github_client = github_client
-    update({
+    attributes = {
       repository_full_name: extract_full_name_from_remote_subject(remote_subject),
       github_id: remote_subject['id'],
       state: remote_subject['merged_at'].present? ? 'merged' : remote_subject['state'],
@@ -61,7 +61,10 @@ class Subject < ApplicationRecord
       body: remote_subject['body'].try(:gsub, "\u0000", ''),
       draft: remote_subject['draft'],
       title: remote_subject['title']
-    })
+    }
+    reaction_counts = ReactionSummary.from(remote_subject)
+    attributes[:reactions] = reaction_counts unless reaction_counts.nil?
+    update(attributes)
 
     return unless persisted?
 
@@ -76,6 +79,7 @@ class Subject < ApplicationRecord
   def self.sync(remote_subject, github_client: nil)
     subject = Subject.find_or_create_by(url: remote_subject['url'])
     subject.sync(remote_subject, github_client: github_client)
+    subject
   end
 
   def self.sync_status(sha, repository_full_name)
@@ -113,6 +117,10 @@ class Subject < ApplicationRecord
     end
   end
 
+  def reaction_counts
+    ReactionSummary.valid_counts(reactions)
+  end
+
   def author_url_path
     if bot_author?
       "/apps/#{BOT_AUTHOR_REGEX.match(author)[1]}"
@@ -125,9 +133,24 @@ class Subject < ApplicationRecord
     client = github_client
     return unless client
 
-    remote_comments = download_comments(client)
-    sync_issue_comments(remote_comments) if remote_comments
+    result = download_comments(client)
+    sync_issue_comments(result.items) if result.items.any? || result.complete?
     PullRequestReviewSync.new(self, client: client).sync if pull_request?
+  end
+
+  # Incremental fetches never see deletions, so issue_comment webhooks apply
+  # them (and edits) directly once the payload's repository is trusted.
+  def sync_issue_comment_event(remote_comment, action:, repository_github_id:)
+    return unless webhook_repository_authorized?(repository_github_id)
+
+    with_lock do
+      if action == 'deleted'
+        issue_comments_with_id(remote_value(remote_comment, :id)).destroy_all
+      else
+        sync_issue_comment(remote_comment)
+      end
+      update_column(:comment_count, comments.count)
+    end
   end
 
   def comment(user, comment_body)
@@ -159,7 +182,7 @@ class Subject < ApplicationRecord
   private
 
   def pushable_fields
-    ['state', 'status', 'body', 'comment_count', 'draft']
+    ['state', 'status', 'body', 'comment_count', 'draft', 'reactions']
   end
 
   def assign_status(remote_status)
@@ -180,33 +203,53 @@ class Subject < ApplicationRecord
   #example https://api.github.com/repos/octobox/octobox/issues/1141/comments
   def download_comments(client)
     since = comments.where(activity_kind: 'issue_comment').maximum(:created_at)
-    client.get(url.gsub('/pulls/', '/issues/') + '/comments', since: since)
-  rescue Octokit::ClientError, Faraday::Error
-    nil
+    GithubPreviewFetcher.new(client).collection(
+      url.gsub('/pulls/', '/issues/') + '/comments',
+      params: {since: since}
+    )
   end
 
   def sync_issue_comments(remote_comments)
     with_lock do
-      Array(remote_comments).compact.each do |remote_comment|
-        comment = comments.where(
-          github_id: remote_comment.id,
-          activity_kind: [nil, 'issue_comment']
-        ).first_or_initialize
-        comment.assign_attributes(
-          author: remote_comment.user.try(:login) || 'ghost',
-          url: remote_comment.url,
-          html_url: remote_comment.html_url,
-          body: remote_comment.body.try(:gsub, "\u0000", ''),
-          author_association: remote_comment.author_association,
-          created_at: remote_comment.created_at,
-          updated_at: remote_comment.updated_at || remote_comment.created_at,
-          activity_kind: 'issue_comment',
-          github_node_id: remote_comment.node_id
-        )
-        comment.save! if comment.changed?
-      end
+      Array(remote_comments).compact.each { |remote_comment| sync_issue_comment(remote_comment) }
       update_column(:comment_count, comments.count)
     end
+  end
+
+  def sync_issue_comment(remote_comment)
+    comment = issue_comments_with_id(remote_value(remote_comment, :id)).first_or_initialize
+    created_at = remote_value(remote_comment, :created_at)
+    comment.assign_attributes(
+      author: remote_value(remote_comment, :user, :login) || 'ghost',
+      url: remote_value(remote_comment, :url),
+      html_url: remote_value(remote_comment, :html_url),
+      body: remote_value(remote_comment, :body).try(:gsub, "\u0000", ''),
+      author_association: remote_value(remote_comment, :author_association),
+      created_at: created_at,
+      updated_at: remote_value(remote_comment, :updated_at) || created_at,
+      activity_kind: 'issue_comment',
+      github_node_id: remote_value(remote_comment, :node_id)
+    )
+    # An absent summary keeps the stored counts; an empty one clears them.
+    reaction_counts = ReactionSummary.from(remote_comment)
+    comment.reactions = reaction_counts unless reaction_counts.nil?
+    comment.save! if comment.changed?
+  end
+
+  def issue_comments_with_id(github_id)
+    comments.where(github_id: github_id, activity_kind: [nil, 'issue_comment'])
+  end
+
+  # Webhook payloads arrive as hashes, API responses as Sawyer resources.
+  def remote_value(remote, *keys)
+    keys.reduce(remote) { |object, key| object.is_a?(Hash) ? object[key.to_s] : object.try(key) }
+  end
+
+  def webhook_repository_authorized?(repository_github_id)
+    return false unless repository&.github_id.to_s == repository_github_id.to_s
+    return app_installation.present? if repository.private?
+
+    github_client.present?
   end
 
   def github_client

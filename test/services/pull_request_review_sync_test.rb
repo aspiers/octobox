@@ -254,6 +254,24 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     assert_equal @subject.html_url, removal.web_url
   end
 
+  test 'stores review comment reactions and keeps them when a response omits the summary' do
+    reply = create(
+      :comment,
+      subject: @subject,
+      github_id: 302,
+      activity_kind: 'pull_request_review_comment',
+      reactions: {'rocket' => 2}
+    )
+    comments = Marshal.load(Marshal.dump(@comments))
+    comments.find { |comment| comment['id'] == 301 }['reactions'] = {'total_count' => 2, 'eyes' => 2, 'heart' => 0}
+    client = FakeReviewClient.new(@timeline, comments, @thread_pages)
+
+    assert PullRequestReviewSync.new(@subject, client: client).sync
+
+    assert_equal({'eyes' => 2}, @subject.comments.find_by!(github_id: 301).reactions)
+    assert_equal({'rocket' => 2}, reply.reload.reactions)
+  end
+
   private
 
   def load_json(name)

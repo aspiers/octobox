@@ -327,7 +327,7 @@ class SubjectTest < ActiveSupport::TestCase
     remote_subject = load_fixture('subject_56.json')
     stub_request(:get, remote_subject['url'])
       .to_return(status: 200, body: file_fixture('subject_56.json'), headers: { 'Content-Type' => 'application/json' })
-    stub_request(:get, remote_subject['url'] + '/comments?since')
+    stub_request(:get, remote_subject['url'] + '/comments?per_page=100&since')
       .to_return(status: 200, body: file_fixture('subject_58_comments.json'), headers: { 'Content-Type' => 'application/json' })
 
     user = build(:user, access_token: nil, personal_access_token: 'FAKE_PERSONAL_ACCESS_TOKEN')
@@ -379,10 +379,16 @@ class SubjectTest < ActiveSupport::TestCase
     client = mock
     client.expects(:get).with(
       'https://api.github.com/repos/octobox/octobox/issues/42/comments',
-      since: issue_comment.created_at
+      {
+        accept: GithubPreviewFetcher::ACCEPT,
+        headers: {'X-GitHub-Api-Version' => GithubPreviewFetcher::API_VERSION},
+        per_page: GithubPreviewFetcher::PAGE_SIZE,
+        since: issue_comment.created_at
+      }
     ).returns([])
+    client.expects(:last_response).returns(nil)
 
-    assert_equal [], subject.send(:download_comments, client)
+    assert_empty subject.send(:download_comments, client).items
   end
 
   test 'issue comment persistence is serialized by the subject lock' do
@@ -401,8 +407,14 @@ class SubjectTest < ActiveSupport::TestCase
     client = stub
     client.expects(:get).with(
       'https://api.github.com/repos/octobox/octobox/issues/1/comments',
-      since: nil
+      {
+        accept: GithubPreviewFetcher::ACCEPT,
+        headers: {'X-GitHub-Api-Version' => GithubPreviewFetcher::API_VERSION},
+        per_page: GithubPreviewFetcher::PAGE_SIZE,
+        since: nil
+      }
     ).returns([remote_comment])
+    client.expects(:last_response).returns(nil)
     subject.expects(:github_client).returns(client)
     subject.expects(:with_lock).yields
 
