@@ -231,9 +231,16 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     assert PullRequestReviewSync.new(@subject, client: client).sync
   end
 
-  test 'does not reconcile existing rows or fetch comments after a partial timeline failure' do
+  test 'does not reconcile existing rows or expose response content after a timeline failure' do
     existing = create(:comment, subject: @subject, github_id: 500, body: 'existing review data')
-    client = FakeReviewClient.new(Octokit::BadGateway.new, @comments, @thread_pages)
+    error = Octokit::BadGateway.new(
+      status: 502,
+      body: 'private response body',
+      response_headers: {authorization: 'Bearer secret-token'}
+    )
+    client = FakeReviewClient.new(error, @comments, @thread_pages)
+    logged = []
+    Rails.logger.stubs(:warn).with { |message| logged << message; true }
 
     refute PullRequestReviewSync.new(@subject, client: client).sync
 
@@ -241,6 +248,12 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     assert_equal 0, client.comment_calls
     assert_equal 'existing review data', existing.reload.body
     assert_equal 1, @subject.comments.count
+    event = JSON.parse(logged.fetch(0))
+    assert_equal 'pull_request_review_timeline', event['operation']
+    assert_equal @subject.url, event['subject_url']
+    assert_equal 'Octokit::BadGateway', event['exception']
+    refute_includes logged.first, 'private response body'
+    refute_includes logged.first, 'secret-token'
   end
 
   test 'links review request events without a native URL to the pull request' do
