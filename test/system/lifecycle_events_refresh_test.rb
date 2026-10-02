@@ -98,6 +98,75 @@ class LifecycleEventsRefreshSystemTest < ApplicationSystemTestCase
     assert_equal ["comment-#{earlier.id}", 'github:live-merge', "comment-#{later.id}"], conversation_identities
   end
 
+  test 'a completed response generated before a persisted live comment is discarded and refetched' do
+    assert_delayed_comment_survives(:channel)
+  end
+
+  test 'a completed response generated before a posted comment insertion is discarded and refetched' do
+    assert_delayed_comment_survives(:append)
+  end
+
+  test 'content edits during an outstanding request reject stale data without copying old bodies' do
+    install_state_refresh(delay: true)
+    assert_selector 'body[data-state-response-ready]', wait: 10
+    page.execute_script <<~JS
+      document.querySelector('#comment-123 .card-body').firstChild.textContent = 'Local body edit';
+      window.releaseStateRefresh();
+    JS
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_selector '#comment-123 .card-body', text: 'Edited incoming body', visible: :all
+    assert_equal 2, page.evaluate_script('window.statePollCount')
+  end
+
+  test 'selection and collapse changes during an outstanding request do not invalidate it' do
+    install_state_refresh(delay: true)
+    assert_selector 'body[data-state-response-ready]', wait: 10
+    page.execute_script <<~JS
+      var entry = document.getElementById('comment-123');
+      entry.classList.add('js-current-preview-entry');
+      entry.setAttribute('tabindex', '-1');
+      entry.focus();
+      entry.querySelector('.card-body').classList.add('show');
+      entry.querySelector('.card-header').classList.remove('collapsed');
+      entry.querySelector('.card-header').setAttribute('aria-expanded', 'true');
+      window.releaseStateRefresh();
+    JS
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_selector '#comment-123.js-current-preview-entry .collapse.show'
+    assert_equal 'comment-123', page.evaluate_script('document.activeElement.id')
+    assert_equal 1, page.evaluate_script('window.statePollCount')
+  end
+
+  test 'failed requests and successful replacements leave no active conversation observers' do
+    page.execute_script <<~JS
+      var NativeMutationObserver = window.MutationObserver;
+      window.activeConversationObservers = 0;
+      window.MutationObserver = function(callback) {
+        var observer = new NativeMutationObserver(callback);
+        var observe = observer.observe.bind(observer);
+        var disconnect = observer.disconnect.bind(observer);
+        var watching = false;
+        observer.observe = function(target, options) {
+          if (target.matches && target.matches('.notification-conversation') && !watching) {
+            watching = true;
+            window.activeConversationObservers += 1;
+          }
+          observe(target, options);
+        };
+        observer.disconnect = function() {
+          if (watching) window.activeConversationObservers -= 1;
+          watching = false;
+          disconnect();
+        };
+        return observer;
+      };
+    JS
+    install_state_refresh(fail_first: true)
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_equal 2, page.evaluate_script('window.statePollCount')
+    assert_equal 0, page.evaluate_script('window.activeConversationObservers')
+  end
+
   test 'refresh retains collapsed state and selected focused comment while accepting body edits' do
     install_state_refresh
     page.execute_script <<~JS
@@ -147,9 +216,78 @@ class LifecycleEventsRefreshSystemTest < ApplicationSystemTestCase
 
   private
 
-  # Use a controlled polling response to exercise Bootstrap and optional keyboard
-  # markers even on this source branch, which does not include navigation.
-  def install_state_refresh(selected: nil, remove_selected: false)
+  def assert_delayed_comment_survives(insertion)
+    @subject.update!(comment_count: 1)
+    start = Time.utc(2026, 1, 1)
+    earlier = create(:comment, subject: @subject, created_at: start)
+    find("#notification-#{@notification.id} .thread-link").click
+    assert_selector '.lifecycle-events[data-refresh-pending]'
+    page.execute_script <<~JS
+      var originalFetch = window.fetch;
+      if (App.comments) App.comments.unsubscribe();
+      window.previewPollCount = 0;
+      var refreshUrl = document.querySelector('[data-refresh-url]').dataset.refreshUrl;
+      window.fetch = function(url, options) {
+        if (url !== refreshUrl) return originalFetch(url, options);
+        window.previewPollCount += 1;
+        if (window.previewPollCount > 1) return originalFetch(url, options);
+        return originalFetch(url, options).then(function(response) {
+          return response.text().then(function(html) {
+            return new Promise(function(resolve) {
+              window.releaseStalePreview = function() {
+                resolve({ok: response.ok, text: function() { return Promise.resolve(html); }});
+              };
+              document.body.dataset.stalePreviewReady = 'true';
+            });
+          });
+        });
+      };
+    JS
+    snapshot = create(:lifecycle_event_snapshot, subject: @subject)
+    create(:lifecycle_event, lifecycle_event_snapshot: snapshot, event_type: 'merged',
+           github_identity: 'github:delayed-merge', occurred_at: start + 1.minute)
+    assert_selector 'body[data-stale-preview-ready]', wait: 10
+
+    later = create(:comment, subject: @subject, created_at: start + 2.minutes)
+    @subject.update!(comment_count: 2)
+    html = ApplicationController.render(partial: 'notifications/issue_comment', locals: { comment: later })
+    if insertion == :channel
+      page.execute_script <<~JS
+        var originalCreate = App.cable.subscriptions.create;
+        App.cable.subscriptions.create = function(_options, callbacks) {
+          callbacks.received(#{ {subject_id: @subject.id, comment_id: later.id, comment_html: html}.to_json });
+          return { unsubscribe: function() {} };
+        };
+        subscribeToComments();
+        App.cable.subscriptions.create = originalCreate;
+      JS
+    elsif ENV['PREVIEW_REPLY_INSERTION'] == 'ajax'
+      # The combined build has the independent reply handler. Exercise it there.
+      page.execute_script <<~JS
+        if (!document.getElementById('reply')) {
+          document.getElementById('thread').insertAdjacentHTML('beforeend', '<form id="reply"><textarea id="comment_body"></textarea></form>');
+        }
+        $('#reply').trigger('ajax:success', [#{html.to_json}]);
+      JS
+    else
+      # The source has no reply handler dependency; exercise its append contract.
+      page.execute_script <<~JS
+        var comment = new DOMParser().parseFromString(#{html.to_json}, 'text/html').body.firstElementChild;
+        document.querySelector('.notification-conversation').append(comment);
+      JS
+    end
+    assert_selector ".notification-conversation #comment-#{later.id}", count: 1
+    page.execute_script 'window.releaseStalePreview()'
+    assert_selector '.lifecycle-event[data-event-identity="github:delayed-merge"]', wait: 10
+    assert_selector ".notification-conversation #comment-#{later.id}", count: 1
+    assert_equal ["comment-#{earlier.id}", 'github:delayed-merge', "comment-#{later.id}"], conversation_identities
+    assert_operator page.evaluate_script('window.previewPollCount'), :>=, 2
+    assert_no_selector '.lifecycle-events[data-refresh-pending]'
+  end
+
+  # Enter through the normal thread fetch path, not global initialization, which
+  # may autoload a different thread in the combined navigation build.
+  def install_state_refresh(selected: nil, remove_selected: false, delay: false, fail_first: false)
     html = <<~HTML
       <div class="notification-conversation">
         <section data-preview-section="lifecycle" data-refresh-pending data-refresh-url="/state-refresh"></section>
@@ -173,14 +311,36 @@ class LifecycleEventsRefreshSystemTest < ApplicationSystemTestCase
     page.execute_script <<~JS
       document.querySelector('.flex-main').classList.add('show-thread');
       document.getElementById('thread').classList.remove('d-none');
-      document.getElementById('thread').innerHTML = '<div class="discussion-thread">' + #{html.to_json} + '</div><textarea id="comment_body"></textarea>';
       var originalFetch = window.fetch;
+      window.statePollCount = 0;
+      delete document.body.dataset.stateResponseReady;
       window.fetch = function(url, options) {
+        if (url === '/state-fixture') {
+          return Promise.resolve({ok: true, headers: {get: function() { return 'text/html'; }}, text: function() {
+            return Promise.resolve('<div class="discussion-thread">' + #{html.to_json} + '</div><textarea id="comment_body"></textarea>');
+          }});
+        }
         if (url === '/state-refresh') {
-          return Promise.resolve({ok: true, text: function() { return Promise.resolve(#{incoming.to_json}); }});
+          window.statePollCount += 1;
+          if (#{fail_first} && window.statePollCount === 1) return Promise.resolve({ok: false});
+          var response = {ok: true, text: function() { return Promise.resolve(#{incoming.to_json}); }};
+          if (#{delay} && window.statePollCount === 1) {
+            return new Promise(function(resolve) {
+              window.releaseStateRefresh = function() { resolve(response); };
+              document.body.dataset.stateResponseReady = 'true';
+            });
+          }
+          return Promise.resolve(response);
         }
         return originalFetch(url, options);
       };
+      var link = document.createElement('a');
+      link.className = 'thread-link';
+      link.href = '/state-fixture';
+      Octobox.viewThread({preventDefault: function() {}, target: link});
+    JS
+    assert_selector '#comment-123'
+    page.execute_script <<~JS
       var selected = #{selected.to_json};
       if (selected) {
         var entry = selected === 'event' ? document.querySelector('[data-event-identity]') : document.getElementById(selected);
@@ -188,7 +348,6 @@ class LifecycleEventsRefreshSystemTest < ApplicationSystemTestCase
         entry.setAttribute('tabindex', '-1');
         entry.focus();
       }
-      Octobox.initialize();
     JS
   end
 

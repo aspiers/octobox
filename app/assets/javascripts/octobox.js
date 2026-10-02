@@ -776,17 +776,36 @@ var Octobox = (function() {
       // The user may have moved to another notification meanwhile.
       if (!current.length || current[0].dataset.refreshUrl !== url) return;
 
+      var conversations = Array.from(new Set(current.map(function(section) {
+        return section.closest('.notification-conversation');
+      }).filter(Boolean)));
+      var guards = conversations.map(function(conversation) {
+        var guard = { conversation: conversation, changed: false };
+        guard.observer = new MutationObserver(function() { guard.changed = true; });
+        // Content edits invalidate the response; selection and collapse attributes do not.
+        guard.observer.observe(conversation, { childList: true, characterData: true, subtree: true });
+        return guard;
+      });
+
       fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(response) {
           if (!response.ok) throw new Error('Request failed');
           return response.text();
         })
         .then(function(html) {
+          guards.forEach(function(guard) {
+            // Drain queued records too, then stop before our own replacement.
+            guard.changed = guard.changed || guard.observer.takeRecords().length > 0;
+            guard.observer.disconnect();
+          });
           var fresh = new DOMParser().parseFromString(html, 'text/html');
           current.forEach(function(section) {
             if (!document.contains(section)) return;
             // Lifecycle rows share ordering and pagination with comments.
             var conversation = section.closest('.notification-conversation');
+            var guard = guards.find(function(candidate) { return candidate.conversation === conversation; });
+            // Keep the current pending marker so even a completed stale snapshot is retried.
+            if (guard && guard.changed) return;
             var selector = conversation ? '.notification-conversation' :
               '[data-preview-section="' + section.dataset.previewSection + '"]';
             var replacement = fresh.querySelector(selector);
@@ -797,6 +816,9 @@ var Octobox = (function() {
           });
         })
         .catch(function() {})
+        .finally(function() {
+          guards.forEach(function(guard) { guard.observer.disconnect(); });
+        })
         .then(function() { refreshPendingPreviewSections(attempt + 1); });
     }, PREVIEW_REFRESH_INTERVAL_MS);
   };
