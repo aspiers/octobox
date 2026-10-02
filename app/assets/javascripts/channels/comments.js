@@ -9,7 +9,9 @@ var subscribeToComments = function(){
     received: function(data){
       var thread = document.querySelector('#notification-thread');
       if (thread && thread.getAttribute('data-subject-id') == data.subject_id && !document.querySelectorAll("#comment-" + data.comment_id).length){
-        document.querySelector('.discussion-thread').insertAdjacentHTML('beforeend', data.comment_html);
+        var discussion = thread.querySelector('.discussion-thread');
+        var conversation = discussion && (discussion.querySelector('.notification-conversation') || discussion);
+        if (conversation) conversation.insertAdjacentHTML('beforeend', data.comment_html);
       } else if (document.querySelectorAll("#comment-" + data.comment_id).length){
         document.querySelector("#comment-" + data.comment_id).outerHTML = data.comment_html;
       }

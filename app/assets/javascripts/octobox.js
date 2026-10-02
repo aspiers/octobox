@@ -711,6 +711,51 @@ var Octobox = (function() {
     );
   };
 
+  var matchingConversationEntry = function(entry, conversation) {
+    if (!entry) return null;
+    if (entry.id && /^(comment|review|review-thread|review-comment|review-activity)-\d+$/.test(entry.id)) {
+      return conversation.querySelector('#' + entry.id);
+    }
+    if (entry.hasAttribute('data-preview-entry') && entry.dataset.eventIdentity) {
+      return Array.from(conversation.querySelectorAll('[data-preview-entry][data-event-identity]')).find(function(candidate) {
+        return candidate.dataset.eventIdentity === entry.dataset.eventIdentity;
+      });
+    }
+    return null;
+  };
+
+  var replaceConversation = function(conversation, replacement) {
+    var selected = matchingConversationEntry(conversation.querySelector('.js-current-preview-entry'), replacement);
+    var active = document.activeElement;
+    var focused = conversation.contains(active) ? matchingConversationEntry(active, replacement) : null;
+
+    // Restore only UI state by identity, leaving incoming bodies and ordering intact.
+    conversation.querySelectorAll('[data-toggle="collapse"][data-target]').forEach(function(header) {
+      var entry = header.closest('[id], [data-preview-entry]');
+      var freshEntry = matchingConversationEntry(entry, replacement);
+      if (!freshEntry) return;
+      var freshHeader = Array.from(freshEntry.querySelectorAll('[data-toggle="collapse"][data-target]')).find(function(candidate) {
+        return candidate.dataset.target === header.dataset.target;
+      });
+      var panel = entry.querySelector(header.dataset.target);
+      var freshPanel = freshHeader && freshEntry.querySelector(header.dataset.target);
+      if (!panel || !freshPanel) return;
+      var expanded = panel.classList.contains('show');
+      freshPanel.classList.toggle('show', expanded);
+      freshHeader.classList.toggle('collapsed', !expanded);
+      freshHeader.setAttribute('aria-expanded', expanded.toString());
+    });
+    if (selected) {
+      selected.classList.add('js-current-preview-entry');
+      selected.setAttribute('tabindex', '-1');
+    }
+    conversation.replaceWith(replacement);
+    if (focused) {
+      focused.setAttribute('tabindex', '-1');
+      focused.focus({ preventScroll: true });
+    }
+  };
+
   // Preview sections fetched in the background render a pending marker on
   // the first view, before their data exists. Re-fetch the thread until the
   // marker clears so that view still ends up showing the activity.
@@ -745,7 +790,10 @@ var Octobox = (function() {
             var selector = conversation ? '.notification-conversation' :
               '[data-preview-section="' + section.dataset.previewSection + '"]';
             var replacement = fresh.querySelector(selector);
-            if (replacement) (conversation || section).replaceWith(replacement);
+            if (replacement) {
+              if (conversation) replaceConversation(conversation, replacement);
+              else section.replaceWith(replacement);
+            }
           });
         })
         .catch(function() {})

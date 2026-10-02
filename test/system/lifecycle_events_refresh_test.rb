@@ -69,7 +69,128 @@ class LifecycleEventsRefreshSystemTest < ApplicationSystemTestCase
     assert_no_selector '#more-comments'
   end
 
+  test 'a live comment arriving during polling appears once in chronological position' do
+    @subject.update!(comment_count: 1)
+    start = Time.utc(2026, 1, 1)
+    earlier = create(:comment, subject: @subject, created_at: start)
+    find("#notification-#{@notification.id} .thread-link").click
+    assert_selector '.lifecycle-events[data-refresh-pending]'
+
+    later = create(:comment, subject: @subject, created_at: start + 2.minutes)
+    @subject.update!(comment_count: 2)
+    html = ApplicationController.render(partial: 'notifications/issue_comment', locals: { comment: later })
+    page.execute_script <<~JS
+      var originalCreate = App.cable.subscriptions.create;
+      App.cable.subscriptions.create = function(_options, callbacks) {
+        callbacks.received(#{ {subject_id: @subject.id, comment_id: later.id, comment_html: html}.to_json });
+        return { unsubscribe: function() {} };
+      };
+      subscribeToComments();
+      App.cable.subscriptions.create = originalCreate;
+    JS
+    assert_selector "#comment-#{later.id}", count: 1
+
+    snapshot = create(:lifecycle_event_snapshot, subject: @subject)
+    create(:lifecycle_event, lifecycle_event_snapshot: snapshot, event_type: 'merged',
+           github_identity: 'github:live-merge', occurred_at: start + 1.minute)
+    assert_selector '.lifecycle-event[data-event-identity="github:live-merge"]', wait: 10
+    assert_selector "#comment-#{later.id}", count: 1
+    assert_equal ["comment-#{earlier.id}", 'github:live-merge', "comment-#{later.id}"], conversation_identities
+  end
+
+  test 'refresh retains collapsed state and selected focused comment while accepting body edits' do
+    install_state_refresh
+    page.execute_script <<~JS
+      var entry = document.getElementById('comment-123');
+      entry.classList.add('js-current-preview-entry');
+      entry.setAttribute('tabindex', '-1');
+      entry.focus();
+    JS
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_selector '#comment-123 .collapse:not(.show)', visible: :all
+    assert_selector '#comment-123 [aria-expanded="false"].collapsed', visible: :all
+    assert_selector '#comment-123.js-current-preview-entry'
+    assert_equal 'comment-123', page.evaluate_script('document.activeElement.id')
+    assert_selector '#comment-123 .card-body', text: 'Edited incoming body', visible: :all
+  end
+
+  test 'refresh retains selected review without stealing focus from the reply' do
+    install_state_refresh(selected: 'review-456')
+    page.execute_script "document.getElementById('comment_body').focus()"
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_selector '#review-456.js-current-preview-entry'
+    assert_equal 'comment_body', page.evaluate_script('document.activeElement.id')
+  end
+
+  test 'refresh retains selected focused lifecycle identity without an element id' do
+    install_state_refresh(selected: 'event')
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_selector '[data-event-identity="github:state-event"].js-current-preview-entry'
+    assert_equal 'github:state-event', page.evaluate_script('document.activeElement.dataset.eventIdentity')
+  end
+
+  test 'refresh retains selected focused review threads and activity' do
+    %w[review-thread-789 review-activity-987].each do |identity|
+      install_state_refresh(selected: identity)
+      assert_selector '.notification-conversation[data-refreshed]', wait: 10
+      assert_selector "##{identity}.js-current-preview-entry"
+      assert_equal identity, page.evaluate_script('document.activeElement.id')
+    end
+  end
+
+  test 'refresh does not transfer selection or focus to a different entry' do
+    install_state_refresh(selected: 'review-456', remove_selected: true)
+    assert_selector '.notification-conversation[data-refreshed]', wait: 10
+    assert_no_selector '.js-current-preview-entry'
+    assert_equal 'BODY', page.evaluate_script('document.activeElement.tagName')
+  end
+
   private
+
+  # Use a controlled polling response to exercise Bootstrap and optional keyboard
+  # markers even on this source branch, which does not include navigation.
+  def install_state_refresh(selected: nil, remove_selected: false)
+    html = <<~HTML
+      <div class="notification-conversation">
+        <section data-preview-section="lifecycle" data-refresh-pending data-refresh-url="/state-refresh"></section>
+        <div id="comment-123" class="card-comment">
+          <div class="card-header collapsed" data-toggle="collapse" data-target=".comment-123" aria-expanded="false"></div>
+          <div class="comment-123 card-body collapse">Original body</div>
+        </div>
+        <div id="review-456" class="card-comment">Review</div>
+        <div id="review-thread-789" class="review-thread">Review thread</div>
+        <div id="review-activity-987" class="review-activity">Review request</div>
+        <div data-preview-entry data-event-identity="github:state-event">Event</div>
+      </div>
+    HTML
+    incoming = html.sub('Original body', 'Edited incoming body')
+                   .sub('data-refresh-pending', 'data-refreshed-section')
+                   .sub('notification-conversation"', 'notification-conversation" data-refreshed')
+                   .sub('card-header collapsed', 'card-header')
+                   .sub('aria-expanded="false"', 'aria-expanded="true"')
+                   .sub('card-body collapse', 'card-body collapse show')
+    incoming = incoming.sub('<div id="review-456" class="card-comment">Review</div>', '') if remove_selected
+    page.execute_script <<~JS
+      document.querySelector('.flex-main').classList.add('show-thread');
+      document.getElementById('thread').classList.remove('d-none');
+      document.getElementById('thread').innerHTML = '<div class="discussion-thread">' + #{html.to_json} + '</div><textarea id="comment_body"></textarea>';
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (url === '/state-refresh') {
+          return Promise.resolve({ok: true, text: function() { return Promise.resolve(#{incoming.to_json}); }});
+        }
+        return originalFetch(url, options);
+      };
+      var selected = #{selected.to_json};
+      if (selected) {
+        var entry = selected === 'event' ? document.querySelector('[data-event-identity]') : document.getElementById(selected);
+        entry.classList.add('js-current-preview-entry');
+        entry.setAttribute('tabindex', '-1');
+        entry.focus();
+      }
+      Octobox.initialize();
+    JS
+  end
 
   def conversation_identities
     all('.notification-conversation .card-comment[id], .notification-conversation .lifecycle-event').map do |node|
