@@ -54,11 +54,10 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
       review.className = 'review-activity card';
       review.textContent = 'Review';
 
-      var discussion = document.querySelector('.discussion-thread');
       var comment = document.getElementById('comment-#{comment.id}');
       comment.style.minHeight = '2000px';
-      discussion.insertBefore(section, comment);
-      discussion.insertBefore(review, comment);
+      comment.parentElement.insertBefore(section, comment);
+      comment.parentElement.insertBefore(review, comment);
     JS
 
     entry_ids = ['', 'preview-activity', 'reference-activity', 'review-activity', "comment-#{comment.id}", "comment-#{next_comment.id}"]
