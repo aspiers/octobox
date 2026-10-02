@@ -57,23 +57,21 @@
             </div>
           </div>
         <% end %>
-        <%= render 'notifications/lifecycle_events',
-                   lifecycle_events: @lifecycle_events,
-                   total_count: @lifecycle_event_total_count,
-                   snapshot: @lifecycle_event_snapshot if @lifecycle_event_snapshot %>
+        <div class="notification-conversation">
+          <%= render 'notifications/lifecycle_events',
+                     snapshot: @lifecycle_event_snapshot if @lifecycle_event_snapshot %>
 
-        <% if @notification.subject.commentable? %>
           <% if @comments_left_to_load > 0 %>
             <div id='more-comments'>
               <%= link_to expand_comments_notification_url, class: 'btn btn-secondary mt-3' do %>
                 <%= octicon('comment', height: 16, class: 'ml-1') %>
-                View <%= @comments_left_to_load %> more comments and reviews
+                View <%= @comments_left_to_load %> more conversation entries
               <% end %>
             </div>
           <% end %>
 
           <%= render 'notifications/conversation', conversation_page: @conversation_page %>
-        <% end %>
+        </div>
 
       </div>
 

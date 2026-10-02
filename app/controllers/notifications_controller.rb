@@ -20,10 +20,10 @@ class NotificationsController < ApplicationController
 
     load_notification_navigation(scope)
 
+    load_lifecycle_events
     @conversation_page = conversation_page(@notification, limit: 5)
     @comments_left_to_load = @conversation_page.remaining_count
 
-    load_lifecycle_events
     render partial: "notifications/thread", layout: false if request.xhr?
   end
 
@@ -32,16 +32,16 @@ class NotificationsController < ApplicationController
 
     load_notification_navigation(scope)
 
+    load_lifecycle_events
     @comments_left_to_load = 0
     @conversation_page = conversation_page(@notification)
 
-    load_lifecycle_events
     render 'notifications/show'
   end
 
   def conversation_page(notification, limit: nil)
-    if notification.display? && notification.subject&.commentable?
-      NotificationConversationPresenter.new(notification.subject).page(limit: limit)
+    if notification.display? && notification.subject
+      NotificationConversationPresenter.new(notification.subject, lifecycle_events: @lifecycle_events).page(limit: limit)
     else
       NotificationConversationPresenter::Page.new(entries: [], remaining_count: 0, total_count: 0)
     end
@@ -118,7 +118,6 @@ class NotificationsController < ApplicationController
 
   def load_lifecycle_events
     @lifecycle_events = []
-    @lifecycle_event_total_count = 0
     return unless @notification.subject&.issue_or_pull_request? && @notification.display?
 
     subject = @notification.subject
@@ -129,8 +128,7 @@ class NotificationsController < ApplicationController
     end
     return unless @lifecycle_event_snapshot
 
-    @lifecycle_events = @lifecycle_event_snapshot.lifecycle_events.latest_chronologically(50)
-    @lifecycle_event_total_count = @lifecycle_event_snapshot.total_count
+    @lifecycle_events = @lifecycle_event_snapshot.lifecycle_events.to_a
   end
 
   def sync
