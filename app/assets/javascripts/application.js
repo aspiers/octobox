@@ -41,10 +41,11 @@ $(document).on('ajax:success', '#reply', function(_event, data) {
   var parsedResponse = new DOMParser().parseFromString(data, 'text/html');
   var comment = parsedResponse.body.firstElementChild;
   var discussionThread = document.querySelector('.discussion-thread');
-  if (comment && /^comment-\d+$/.test(comment.id) && discussionThread) {
+  var conversation = discussionThread && (discussionThread.querySelector('.notification-conversation') || discussionThread);
+  if (comment && /^comment-\d+$/.test(comment.id) && conversation) {
     var renderedComment = document.querySelector('#' + comment.id);
     if (!renderedComment) {
-      discussionThread.append(comment);
+      conversation.append(comment);
       renderedComment = comment;
     }
     renderedComment.scrollIntoView({block: 'nearest'});
