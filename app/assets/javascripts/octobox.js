@@ -904,12 +904,105 @@ var Octobox = (function() {
     document.documentElement.style.setProperty('--vh', "".concat(vh, "px"));
   };
 
+  var MIN_PANE_WIDTH = 200;
+
+  // Each pane that can be resized by dragging the divider next to it.
+  // `sign` is the pane width change per pixel the pointer moves right.
+  // The width lives on <html> as --<name>-width plus a <name>-resized class,
+  // so the inline script in the layout head can restore it before first
+  // paint and Turbolinks keeps it across visits.
+  var PANE_RESIZERS = [
+    { name: "sidebar", divider: ".js-sidebar-divider", pane: ".flex-sidebar", sign: 1 },
+    { name: "thread", divider: ".js-thread-divider", pane: "#thread", sign: -1 }
+  ];
+
+  var paneStorageKey = function(resizer) { return "octobox:pane-width:" + resizer.name; };
+
+  // Widths are kept as a percentage of the layout width so the panes keep
+  // their proportions when the page is reloaded in a different window size.
+  var applyPanePercent = function(resizer, percent) {
+    document.documentElement.style.setProperty("--" + resizer.name + "-width", percent + "%");
+    document.documentElement.classList.add(resizer.name + "-resized");
+  };
+
+  var storedPanePercent = function(resizer) {
+    try {
+      var percent = parseFloat(localStorage.getItem(paneStorageKey(resizer)));
+      return percent > 0 && percent < 100 ? percent : null;
+    } catch {
+      return null;
+    }
+  };
+
+  var rememberPanePercent = function(resizer, percent) {
+    try {
+      localStorage.setItem(paneStorageKey(resizer), percent.toFixed(2));
+    } catch {
+      // Private mode or storage disabled: the width still applies for this page.
+    }
+  };
+
+  var initPaneResizer = function(flexContent, resizer) {
+    var divider = flexContent.querySelector(resizer.divider);
+    var pane = flexContent.querySelector(resizer.pane);
+    if (!divider || !pane) return;
+
+    var stored = storedPanePercent(resizer);
+    if (stored) applyPanePercent(resizer, stored);
+
+    var toPercent = function(width) { return width / flexContent.clientWidth * 100; };
+
+    // Keep both the pane and the notification list at least MIN_PANE_WIDTH wide.
+    var clampWidth = function(width) {
+      var flexMain = flexContent.querySelector(".flex-main");
+      var shared = pane.getBoundingClientRect().width + (flexMain ? flexMain.getBoundingClientRect().width : 0);
+      var max = Math.max(shared - MIN_PANE_WIDTH, MIN_PANE_WIDTH);
+      return Math.min(Math.max(width, MIN_PANE_WIDTH), max);
+    };
+
+    divider.addEventListener("pointerdown", function(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      var startX = event.clientX;
+      var startWidth = pane.getBoundingClientRect().width;
+      var percent = toPercent(startWidth);
+      divider.setPointerCapture(event.pointerId);
+      divider.classList.add("is-dragging");
+      document.body.classList.add("is-resizing-pane");
+
+      var onMove = function(moveEvent) {
+        percent = toPercent(clampWidth(startWidth + resizer.sign * (moveEvent.clientX - startX)));
+        applyPanePercent(resizer, percent);
+      };
+      var onEnd = function() {
+        divider.removeEventListener("pointermove", onMove);
+        divider.removeEventListener("pointerup", onEnd);
+        divider.removeEventListener("pointercancel", onEnd);
+        divider.classList.remove("is-dragging");
+        document.body.classList.remove("is-resizing-pane");
+        rememberPanePercent(resizer, percent);
+      };
+      divider.addEventListener("pointermove", onMove);
+      divider.addEventListener("pointerup", onEnd);
+      divider.addEventListener("pointercancel", onEnd);
+    });
+  };
+
+  // Lets the dividers beside the sidebar and the preview pane be dragged
+  // left/right, remembering the resulting pane widths.
+  var initPaneResizers = function() {
+    var flexContent = document.querySelector(".flex-content");
+    if (!flexContent) return;
+    PANE_RESIZERS.forEach(function(resizer) { initPaneResizer(flexContent, resizer); });
+  };
+
   var initialize = function() {
     enableTooltips();
     enablePopOvers();
 
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
+    initPaneResizers();
 
     // Initialize checkbox functionality - always needed
     initShiftClickCheckboxes();

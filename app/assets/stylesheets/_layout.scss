@@ -53,6 +53,58 @@ body {
   padding-left: 0;
 }
 
+.flex-divider {
+  flex: 0 0 8px;
+  position: relative;
+  cursor: col-resize;
+  background-color: $gray-200;
+  border-left: 1px solid $border-color;
+  border-right: 1px solid $border-color;
+  // A short grip bar so the divider reads as a handle, not a border.
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 32px;
+    border-radius: 1px;
+    background-color: $gray-500;
+    transform: translate(-50%, -50%);
+  }
+  &:hover, &.is-dragging {
+    background-color: theme-color("primary");
+    border-color: theme-color("primary");
+    &::after {
+      background-color: $white;
+    }
+  }
+}
+
+// flex-shrink stays enabled so a remembered width from a wider window
+// cannot push the pane off screen.
+html.sidebar-resized .flex-sidebar {
+  flex: 0 1 var(--sidebar-width);
+  width: var(--sidebar-width);
+}
+
+// The preview divider is only useful while the pane is visible: either
+// because a thread was opened, or because the viewport is wide enough that
+// the pane is always shown (matching the pane's d-xxxl-block).
+.js-thread-divider {
+  display: none;
+}
+
+.flex-main.show-thread + .js-thread-divider {
+  display: block;
+}
+
+@include media-breakpoint-up(xxxl) {
+  .js-thread-divider {
+    display: block;
+  }
+}
+
 .flex-thread {
   flex: 1;
   min-width: 0;
@@ -71,6 +123,15 @@ body {
   img{
     max-width: 100%
   }
+}
+
+html.thread-resized .flex-thread {
+  flex: 0 1 var(--thread-width);
+}
+
+body.is-resizing-pane {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .nothing-here{
@@ -137,5 +198,16 @@ body {
   @include responsive;
   .flex-main.show-thread{
     display:none;
+  }
+  // The sidebar slides in off-canvas and the list hides behind an open
+  // thread, so neither pane is resizable here.
+  .flex-divider, .flex-main.show-thread + .js-thread-divider {
+    display: none;
+  }
+  html.sidebar-resized .flex-sidebar {
+    width: $sidebar-width;
+  }
+  html.thread-resized .flex-thread {
+    flex: 1;
   }
 }

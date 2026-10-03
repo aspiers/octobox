@@ -7,10 +7,12 @@
   <div class="flex-sidebar">
     <%= render "sidebar" %>
   </div>
+  <%= render 'pane_divider', pane: 'sidebar', label: 'sidebar' %>
   <div class="flex-main">
     <%= render "list" %>
   </div>
   <% if display_thread? %>
+    <%= render 'pane_divider', pane: 'thread', label: 'preview pane' %>
     <div id='thread' class='flex-thread d-none d-xxxl-block'>
       <div class="nothing-here text-center align-self-center">
         <%= octicon 'comment-discussion', height: 32, class: 'blankslate-icon' %>
