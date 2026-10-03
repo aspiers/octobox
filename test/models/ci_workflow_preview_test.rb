@@ -58,11 +58,14 @@ class CiWorkflowPreviewTest < ActiveSupport::TestCase
   test 'unsupported types stay external and Issue and PullRequest eligibility is unchanged' do
     stub_include_comments
     user = create(:user, display_comments: true)
-    refute build(:notification, user: user, subject_type: 'Discussion').display_thread?
+    unsupported = build(:notification, user: user, subject_type: 'RepositoryInvitation')
+    refute unsupported.subjectable?
+    refute unsupported.display_thread?
     %w[Issue PullRequest].each do |type|
       notification = create(:notification, user: user, subject_type: type)
+      assert_nil notification.subject
       refute notification.display_thread?
-      create(:subject, notifications: [notification])
+      create(:subject, url: notification.subject_url, notifications: [notification])
       assert notification.reload.display_thread?
     end
   end
