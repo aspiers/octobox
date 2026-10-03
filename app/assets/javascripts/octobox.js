@@ -44,7 +44,7 @@ var Octobox = (function() {
     var target = new URL(href, window.location.href);
     if (target.origin !== window.location.origin) return false;
 
-    window.location.assign(target.href);
+    Turbolinks.visit(target.href);
     return true;
   };
 
@@ -1099,12 +1099,12 @@ var Octobox = (function() {
   };
 
   var nextPage = function() {
-    var nextBtn = document.querySelector(".page-item:last-child .page-link[rel=next]");
+    var nextBtn = document.querySelector(".page-item.next .page-link");
     if (nextBtn) navigateWithinOctobox(nextBtn.getAttribute('href'));
   }
 
   var prevPage = function() {
-    var prevBtn = document.querySelector(".page-item:first-child .page-link[rel=prev]");
+    var prevBtn = document.querySelector(".page-item.prev .page-link");
     if (prevBtn) navigateWithinOctobox(prevBtn.getAttribute('href'));
   }
 

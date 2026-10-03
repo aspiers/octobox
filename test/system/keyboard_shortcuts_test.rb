@@ -775,6 +775,57 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert @notification2.reload.archived?
   end
 
+  test 'n and p route pagination through Turbolinks' do
+    create_list(:notification, 50, user: @user)
+    visit '/'
+    next_url = find('.page-item.next .page-link')[:href]
+    capture_turbolinks_visits
+
+    send_keys 'n'
+    assert_equal next_url, page.evaluate_script('window.lastTurbolinksVisit')
+
+    visit '/?page=2'
+    previous_url = find('.page-item.prev .page-link')[:href]
+    capture_turbolinks_visits
+
+    send_keys 'p'
+    assert_equal previous_url, page.evaluate_script('window.lastTurbolinksVisit')
+  end
+
+  test 'Turbolinks pagination rejects URLs outside Octobox' do
+    create_list(:notification, 50, user: @user)
+    visit '/'
+    capture_turbolinks_visits
+
+    ['https://example.org/', 'javascript:alert(1)'].each do |href|
+      page.execute_script("document.querySelector('.page-item.next .page-link').href = #{href.to_json}")
+
+      send_keys 'n'
+
+      assert_nil page.evaluate_script('window.lastTurbolinksVisit')
+    end
+  end
+
+  test 'r routes foreground sync through Turbolinks' do
+    stub_background_jobs_enabled(value: false)
+    visit '/'
+    sync_url = find('a.js-sync')[:href]
+    capture_turbolinks_visits
+
+    send_keys 'r'
+    sleep 0.1
+
+    assert_equal sync_url, page.evaluate_script('window.lastTurbolinksVisit')
+  end
+
+  def capture_turbolinks_visits
+    page.execute_script(<<~JS)
+      Turbolinks.visit = function(url) {
+        window.lastTurbolinksVisit = new URL(url, window.location.href).href;
+      };
+    JS
+  end
+
   def send_keys(*keys)
     find('body').send_keys(*keys)
   end
