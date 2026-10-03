@@ -2,6 +2,9 @@
 class NotificationsController < ApplicationController
   include NotificationsConcern
 
+  COMMENTS_AUTOLOAD_LIMIT = 50
+  DEFAULT_COMMENTS_LIMIT = 5
+
   skip_before_action :authenticate_user!
   before_action :authenticate_web_or_api!
   before_action :find_notification, only: [:star]
@@ -25,9 +28,10 @@ class NotificationsController < ApplicationController
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
 
     if @notification.subject && @notification.subject.commentable?
-      comments_loaded = 5
+      comment_count = @notification.subject.comment_count.to_i
+      comments_loaded = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? comment_count : DEFAULT_COMMENTS_LIMIT
       @comments = @notification.subject.comments.order('created_at DESC').limit(comments_loaded).reverse
-      @comments_left_to_load = @notification.subject.comment_count - comments_loaded
+      @comments_left_to_load = comment_count - comments_loaded
       @comments_left_to_load = 0 if @comments_left_to_load < 0
     else
       @comments = []

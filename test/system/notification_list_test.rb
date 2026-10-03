@@ -77,6 +77,36 @@ class NotificationListTest < ApplicationSystemTestCase
     assert_current_path notification_path(@unread_notification, draft: true)
   end
 
+  test 'autoloads as many as 50 comments in the notification preview' do
+    Octobox.stubs(:include_comments?).returns(true)
+    subject = create(:subject, notifications: [@notification], comment_count: 50)
+    create_list(:comment, 50, subject: subject)
+    visit '/'
+
+    within "#notification-#{@notification.id}" do
+      click_link 'Fix the widget'
+    end
+
+    assert_selector '.discussion-thread .card-comment', count: 50
+    assert_no_selector '#more-comments'
+  end
+
+  test 'keeps the expansion flow above 50 comments' do
+    Octobox.stubs(:include_comments?).returns(true)
+    subject = create(:subject, notifications: [@notification], comment_count: 51)
+    create_list(:comment, 51, subject: subject)
+    visit '/'
+
+    within "#notification-#{@notification.id}" do
+      click_link 'Fix the widget'
+    end
+
+    assert_selector '.discussion-thread .card-comment', count: 5
+    click_link 'View 46 more comments and reviews'
+    assert_selector '.discussion-thread .card-comment', count: 51
+    assert_no_selector '#more-comments'
+  end
+
   test 'sidebar starred link navigates to starred view' do
     create(:notification, user: @user, starred: true, subject_title: 'Starred item')
     within '.flex-sidebar' do
