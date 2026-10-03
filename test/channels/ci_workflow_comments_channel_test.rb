@@ -5,7 +5,8 @@ class CiWorkflowCommentsChannelTest < ActionCable::Channel::TestCase
   tests CommentsChannel
 
   setup do
-    @user = create(:user)
+    stub_include_comments
+    @user = create(:user, display_comments: true)
     stub_connection current_user: @user
   end
 
@@ -71,6 +72,30 @@ class CiWorkflowCommentsChannelTest < ActionCable::Channel::TestCase
 
     assert subscription.rejected?
     assert_no_streams
+  end
+
+  %w[Issue PullRequest].each do |type|
+    test "rejects #{type} subscriptions when user comments are disabled" do
+      notification = create(:notification, user: @user, subject_type: type)
+      create(:subject, notifications: [notification])
+      @user.update_column(:display_comments, false)
+
+      subscribe notification: notification.id
+
+      assert subscription.rejected?
+      assert_no_streams
+    end
+
+    test "rejects #{type} subscriptions when global comments are disabled" do
+      notification = create(:notification, user: @user, subject_type: type)
+      create(:subject, notifications: [notification])
+      stub_include_comments(value: false)
+
+      subscribe notification: notification.id
+
+      assert subscription.rejected?
+      assert_no_streams
+    end
   end
 
   test 'preserves visible owned Issue subscriptions' do

@@ -5,6 +5,7 @@ class CommentsChannel < ApplicationCable::Channel
 
     notification = current_user.notifications.find_by(id: params[:notification])
     return reject unless notification && !notification.ci_workflow_preview? && notification.display?
+    return reject unless notification.display_thread?
 
     subject = notification.subject
     return reject unless subject

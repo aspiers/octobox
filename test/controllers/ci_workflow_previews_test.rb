@@ -132,6 +132,22 @@ class CiWorkflowPreviewsTest < ActionDispatch::IntegrationTest
     assert_not_requested :post, /github\.com/
   end
 
+  [true, false].each do |xhr|
+    test "shared CheckSuite summary exits before discussion loading for xhr=#{xhr}" do
+      create(:subject, notifications: [@notification], body: 'Unrelated shared body')
+      Notification.any_instance.expects(:subject).never
+
+      get notification_path(@notification), params: { repo: @notification.repository_full_name }, xhr: xhr
+
+      assert_response :success
+      assert_select '.ci-workflow-preview', count: 1
+      assert_select '.ci-workflow-preview dd', text: 'Failed'
+      assert_nil assigns(:comments), 'Standalone previews must return before preparing Subject discussion data'
+      assert_not_includes response.body, 'Unrelated shared body'
+      assert_not_requested :get, /github\.com/
+    end
+  end
+
   test 'nil-subject CheckSuite reply is rejected without error' do
     post comment_notification_path(@notification), params: { comment: { body: 'Not supported' } }, xhr: true
     assert_response :unprocessable_entity
