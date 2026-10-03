@@ -184,9 +184,13 @@ var Octobox = (function() {
       // disable shortcuts while typing or using button-like controls
       var helpBox = document.getElementById("help-box");
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
-      var button = e.target.closest("button, [role='button']");
-      var buttonActivation = button && [13, 32].includes(e.which);
-      if (helpBox && !typing && !buttonActivation && !e.metaKey) {
+      var interactive = e.target.closest("a, button, input, textarea, select, [role='button'], [contenteditable]");
+      var interactiveActivation = interactive && [13, 32].includes(e.which);
+      if (helpBox && !typing && !interactiveActivation && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === "Enter") {
+        openCurrentLink(e);
+        return;
+      }
+      if (helpBox && !typing && !interactiveActivation && !e.metaKey) {
         var shortcutMap = (!e.ctrlKey && !e.altKey)
           ? (e.shiftKey ? shiftShortcuts : shortcuts)
           : {};
@@ -915,7 +919,7 @@ var Octobox = (function() {
   }
 
   var openCurrentLink = function(e) {
-    e.preventDefault(e);
+    e.preventDefault();
     var currentRow = getCurrentRow();
     if (currentRow) {
       var link = currentRow.querySelector("td.notification-subject .link");
@@ -978,6 +982,30 @@ var Octobox = (function() {
   var scrollThreadToBottom = function(e) { scrollThreadTo(e, DOM.thread.scrollHeight); };
   var openPreviousThread = function(e) { openAdjacentThread(e, ".previous"); };
   var openNextThread = function(e) { openAdjacentThread(e, ".next"); };
+
+  var openCurrentGitHubLink = function(e) {
+    e.preventDefault();
+    var currentRow = getCurrentRow();
+    if (!currentRow || !currentRow.dataset.githubUrl) return;
+
+    var githubUrl;
+    try {
+      githubUrl = new URL(currentRow.dataset.githubUrl);
+    } catch {
+      return;
+    }
+    if (!["http:", "https:"].includes(githubUrl.protocol)) return;
+
+    markRead(currentRow.dataset.notificationId);
+    var link = document.createElement("a");
+    link.href = githubUrl.href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.dataset.octoboxGithub = "true";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  };
 
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
@@ -1083,11 +1111,11 @@ var Octobox = (function() {
     69:  toggleArchive,    // e
     77:  muteSelected,     // m
     8:   scrollThreadPageUp,     // Backspace
-    13:  openCurrentLink,        // Enter
+    13:  openCurrentGitHubLink,  // Enter
     32:  scrollThreadPageDown,   // Space
     35:  scrollThreadToBottom,   // End
     36:  scrollThreadToTop,      // Home
-    79:  openCurrentLink,        // o
+    79:  openCurrentGitHubLink,  // o
     191: focusSearchInput,  // /
     190: sync,             // .
     82:  sync,             // r
