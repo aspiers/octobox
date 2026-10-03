@@ -364,6 +364,47 @@ var Octobox = (function() {
     archive(ids, false);
   }
 
+  var nextRowAfter = function(current, excludedRows) {
+    var candidate = current && current.nextElementSibling;
+    while (candidate && excludedRows.includes(candidate)) candidate = candidate.nextElementSibling;
+    if (candidate) return candidate;
+
+    candidate = current && current.previousElementSibling;
+    while (candidate && excludedRows.includes(candidate)) candidate = candidate.previousElementSibling;
+    return candidate;
+  };
+
+  var threadIsOpen = function() {
+    var flexMain = document.querySelector(".flex-main");
+    return DOM.thread && flexMain && flexMain.classList.contains("show-thread");
+  };
+
+  var archiveAndAdvance = function() {
+    if (getDisplayedRows().length === 0) return;
+    var rows = getMarkedOrCurrentRows();
+    if (rows.length === 0) return;
+
+    var ids = getIdsFromRows(rows);
+    if (!threadIsOpen()) {
+      archive(ids, true);
+      return;
+    }
+
+    var nextRow = nextRowAfter(getCurrentRow(), rows);
+    archive(ids, true, function() {
+      if (!nextRow) {
+        resetCursorAfterRowsRemoved(ids);
+        return;
+      }
+
+      markRowCurrent(nextRow);
+      var link = nextRow.querySelector("td.notification-subject .thread-link");
+      if (link) link.click();
+      rows.forEach(row => row.remove());
+      window.current_id = getIdsFromRows([nextRow])[0];
+    });
+  };
+
   var archiveThread = function(){
     var id = DOM.notificationThread.dataset.id;
     archive([id], true);
@@ -374,7 +415,7 @@ var Octobox = (function() {
     archive([id], false);
   }
 
-  var archive = function(ids, value){
+  var archive = function(ids, value, onSuccess){
     var formData = new FormData();
     if (Array.isArray(ids)) {
       ids.forEach(id => formData.append('id[]', id));
@@ -386,7 +427,11 @@ var Octobox = (function() {
     postRequest("/notifications/archive_selected" + location.search, formData)
     .then(response => {
       if (response.ok) {
-        resetCursorAfterRowsRemoved(ids);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          resetCursorAfterRowsRemoved(ids);
+        }
         updateFavicon();
       } else {
         throw new Error('Request failed');
@@ -1286,6 +1331,8 @@ var Octobox = (function() {
     34: scrollThreadHalfPageDown, // Shift-PageDown
     54: scrollThreadToTop,        // ^ (Shift-6)
     71: scrollThreadToBottom,     // G (Shift-g)
+    69: archiveAndAdvance,        // Shift-e
+    89: archiveAndAdvance,        // Shift-y
     191: openModal,               // ?
   }
 

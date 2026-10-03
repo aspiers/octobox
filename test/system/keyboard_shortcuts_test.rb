@@ -182,6 +182,9 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :shift, '/'
     assert_selector '#help-box.show', wait: 2
     assert_text 'Keyboard shortcuts'
+    assert_text 'Mark done on GitHub; returns on new activity'
+    assert_text 'Mark done on GitHub, then open the next notification'
+    assert_text 'Remove Octobox copy; GitHub unchanged'
   end
 
   test 'escape closes help modal' do
@@ -724,6 +727,52 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     current_row = find('td.js-current').ancestor('tr')
     notification_id = current_row[:id].delete_prefix('notification-')
     assert_selector "#notification-thread[data-id='#{notification_id}']", wait: 2
+  end
+
+  test 'shift-e archives the current notification and opens the next preview' do
+    @notification1.update_column(:updated_at, 3.minutes.ago)
+    @notification2.update_column(:updated_at, 2.minutes.ago)
+    @notification3.update_column(:updated_at, 1.minute.ago)
+    visit '/'
+
+    current_row = make_current(@notification2)
+    current_row_id = current_row[:id]
+    find("##{current_row_id} a.thread-link").click
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+    assert_equal @notification1.id.to_s, find('#thread a.next.btn-outline-dark')[:href][%r{/notifications/(\d+)}, 1]
+
+    send_keys :shift, 'e'
+
+    assert_selector "#notification-thread[data-id='#{@notification1.id}']", wait: 2
+    assert_no_selector "##{current_row_id}"
+    assert @notification2.reload.archived?
+  end
+
+  test 'shift-y archives and advances the list cursor' do
+    current_row = make_current(@notification2)
+    current_row_id = current_row[:id]
+    next_row_id = page.evaluate_script("document.getElementById('#{current_row_id}').nextElementSibling.id")
+
+    send_keys :shift, 'y'
+
+    assert_no_selector "##{current_row_id}", wait: 2
+    assert_equal next_row_id, find('td.js-current').ancestor('tr')[:id]
+    assert_no_selector '.flex-main.show-thread'
+    assert @notification2.reload.archived?
+  end
+
+  test 'archive-and-advance archives all marked notifications' do
+    first_row_id = make_current(@notification1)[:id]
+    send_keys 'x'
+    second_row_id = make_current(@notification2)[:id]
+    send_keys 'x'
+
+    send_keys :shift, 'e'
+
+    assert_no_selector "##{first_row_id}", wait: 2
+    assert_no_selector "##{second_row_id}"
+    assert @notification1.reload.archived?
+    assert @notification2.reload.archived?
   end
 
   def send_keys(*keys)
