@@ -1,12 +1,15 @@
 class CommentsChannel < ApplicationCable::Channel
 
   def subscribed
-    if current_user.nil?
-        reject
-    else
-      subject = current_user.notifications.find(params[:notification]).subject
-      stream_for subject
-    end
+    return reject if current_user.nil?
+
+    notification = current_user.notifications.find_by(id: params[:notification])
+    return reject unless notification && !notification.ci_workflow_preview? && notification.display?
+
+    subject = notification.subject
+    return reject unless subject
+
+    stream_for subject
   end
 
   def unsubscribed
