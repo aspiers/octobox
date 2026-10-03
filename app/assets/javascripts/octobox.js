@@ -1111,6 +1111,7 @@ var Octobox = (function() {
     69:  toggleArchive,    // e
     77:  muteSelected,     // m
     8:   scrollThreadPageUp,     // Backspace
+    66:  scrollThreadPageUp,     // b
     13:  openCurrentGitHubLink,  // Enter
     32:  scrollThreadPageDown,   // Space
     35:  scrollThreadToBottom,   // End
