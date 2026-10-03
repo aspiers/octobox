@@ -1094,6 +1094,28 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_operator geometry['entryTop'], :<, geometry['previewBottom']
   end
 
+  test 'shift-D marks current row read' do
+    current_row = find('td.js-current').ancestor('tr')
+    assert_includes current_row[:class], 'active'
+
+    send_keys :shift, 'd'
+    sleep 0.3
+
+    current_row = find('td.js-current').ancestor('tr')
+    refute_includes current_row[:class], 'active'
+  end
+
+  test 'lowercase d no longer marks current row read' do
+    current_row = find('td.js-current').ancestor('tr')
+    assert_includes current_row[:class], 'active'
+
+    send_keys 'd'
+    sleep 0.3
+
+    current_row = find('td.js-current').ancestor('tr')
+    assert_includes current_row[:class], 'active'
+  end
+
   def send_keys(*keys)
     find('body').send_keys(*keys)
   end

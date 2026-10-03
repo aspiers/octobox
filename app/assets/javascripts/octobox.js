@@ -1620,13 +1620,13 @@ var Octobox = (function() {
     89: archiveAndAdvance,        // Shift-y
     74: movePreviewEntryDown,     // Shift-j
     75: movePreviewEntryUp,       // Shift-k
+    68: markReadSelected,         // D
     191: openModal,               // ?
   }
 
   var shortcuts = {
     65:  checkSelectAll,   // a
     67:  focusReplyComposer, // c
-    68:  markReadSelected, // d
     74:  cursorDown,       // j
     75:  cursorUp,         // k
     78:  nextPage,         // n

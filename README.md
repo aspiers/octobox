@@ -102,7 +102,7 @@ You can use keyboard shortcuts to navigate and perform certain actions:
  - `x` - Mark/unmark current notification
  - `y` or `e` - Archive current/marked notification(s)
  - `m` - Mute current/marked notification(s)
- - `d` - Mark current/marked notification(s) as read here and on GitHub
+ - `D` - Mark current/marked notification(s) as read here and on GitHub
  - `Enter` or `o` - Open current notification on GitHub in a new window
  - `Ctrl-Enter` or `Cmd-Enter` - Open or reload the current notification preview
 
