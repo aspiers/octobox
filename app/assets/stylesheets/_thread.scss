@@ -1,0 +1,34 @@
+.ci-activity-item {
+  border-left: 3px solid transparent;
+
+  &[data-ci-outcome="success"] {
+    border-left-color: $notification-open;
+  }
+
+  &[data-ci-outcome="failure"] {
+    border-left-color: $notification-closed;
+  }
+
+  &[data-ci-outcome="pending"],
+  &[data-ci-outcome="action-required"] {
+    border-left-color: $notification-pending;
+  }
+}
+
+.ci-activity-outcome {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 7.5rem;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ci-activity-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ci-activity-summary {
+  white-space: pre-line;
+}

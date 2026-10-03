@@ -22,6 +22,7 @@ class NotificationsController < ApplicationController
     scope = request.xhr? ? current_notifications(scope) : load_and_count_notifications(scope)
 
     load_notification_navigation(scope)
+    @ci_activities = ci_activities_for(@notification)
 
     comment_count = @notification.subject&.comment_count.to_i
     conversation_limit = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? nil : DEFAULT_COMMENTS_LIMIT
@@ -35,6 +36,7 @@ class NotificationsController < ApplicationController
     scope = load_and_count_notifications(notifications_for_presentation.newest)
 
     load_notification_navigation(scope)
+    @ci_activities = ci_activities_for(@notification)
 
     @comments_left_to_load = 0
     @conversation_page = conversation_page(@notification)
@@ -166,5 +168,12 @@ class NotificationsController < ApplicationController
     @notification = current_user.notifications.find(params[:id])
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
+  end
+
+  def ci_activities_for(notification)
+    return CiActivity.none unless notification.display? && notification.subject&.pull_request?
+    return CiActivity.none if notification.private?
+
+    notification.subject.ci_activities.recent_first.limit(50)
   end
 end

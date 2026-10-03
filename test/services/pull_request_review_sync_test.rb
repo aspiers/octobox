@@ -231,9 +231,16 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     assert PullRequestReviewSync.new(@subject, client: client).sync
   end
 
-  test 'does not reconcile existing rows or fetch comments after a partial timeline failure' do
+  test 'does not reconcile existing rows or expose response content after a timeline failure' do
     existing = create(:comment, subject: @subject, github_id: 500, body: 'existing review data')
-    client = FakeReviewClient.new(Octokit::BadGateway.new, @comments, @thread_pages)
+    error = Octokit::BadGateway.new(
+      status: 502,
+      body: 'private response body',
+      response_headers: {authorization: 'Bearer secret-token'}
+    )
+    client = FakeReviewClient.new(error, @comments, @thread_pages)
+    logged = []
+    Rails.logger.stubs(:warn).with { |message| logged << message; true }
 
     refute PullRequestReviewSync.new(@subject, client: client).sync
 
@@ -241,6 +248,12 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     assert_equal 0, client.comment_calls
     assert_equal 'existing review data', existing.reload.body
     assert_equal 1, @subject.comments.count
+    event = JSON.parse(logged.fetch(0))
+    assert_equal 'pull_request_review_timeline', event['operation']
+    assert_equal @subject.url, event['subject_url']
+    assert_equal 'Octokit::BadGateway', event['exception']
+    refute_includes logged.first, 'private response body'
+    refute_includes logged.first, 'secret-token'
   end
 
   test 'links review request events without a native URL to the pull request' do
@@ -252,6 +265,24 @@ class PullRequestReviewSyncTest < ActiveSupport::TestCase
     removal = @subject.comments.find_by!(activity_kind: 'review_request_removed')
     assert_equal @subject.html_url, request.web_url
     assert_equal @subject.html_url, removal.web_url
+  end
+
+  test 'stores review comment reactions and keeps them when a response omits the summary' do
+    reply = create(
+      :comment,
+      subject: @subject,
+      github_id: 302,
+      activity_kind: 'pull_request_review_comment',
+      reactions: {'rocket' => 2}
+    )
+    comments = Marshal.load(Marshal.dump(@comments))
+    comments.find { |comment| comment['id'] == 301 }['reactions'] = {'total_count' => 2, 'eyes' => 2, 'heart' => 0}
+    client = FakeReviewClient.new(@timeline, comments, @thread_pages)
+
+    assert PullRequestReviewSync.new(@subject, client: client).sync
+
+    assert_equal({'eyes' => 2}, @subject.comments.find_by!(github_id: 301).reactions)
+    assert_equal({'rocket' => 2}, reply.reload.reactions)
   end
 
   private

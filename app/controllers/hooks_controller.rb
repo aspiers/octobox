@@ -5,8 +5,17 @@ class HooksController < ApplicationController
 
   def create
     case event_header
-    when 'issues', 'issue_comment'
+    when 'issues'
       SyncSubjectWorker.perform_async_if_configured(payload['issue'])
+    when 'issue_comment'
+      SyncSubjectWorker.perform_async_if_configured(
+        payload['issue'],
+        {
+          'comment' => payload['comment'],
+          'action' => payload['action'],
+          'repository_id' => payload.dig('repository', 'id')
+        }
+      )
     when 'pull_request'
       SyncSubjectWorker.perform_async_if_configured(payload['pull_request'])
     when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'
@@ -29,7 +38,11 @@ class HooksController < ApplicationController
     when 'marketplace_purchase'
       MarketplacePurchaseWorker.perform_async_if_configured(payload)  if ['purchased', 'cancelled', 'changed'].include?(payload['action'])
     when 'status'
-      SyncStatusWorker.perform_async_if_configured(payload['sha'], payload['name'])
+      SyncStatusWorker.perform_async_if_configured(payload['sha'], payload.dig('repository', 'full_name') || payload['name'])
+    when 'check_run'
+      SyncStatusWorker.perform_async_if_configured(payload.dig('check_run', 'head_sha'), payload.dig('repository', 'full_name'))
+    when 'check_suite'
+      SyncStatusWorker.perform_async_if_configured(payload.dig('check_suite', 'head_sha'), payload.dig('repository', 'full_name'))
     when 'repository'
       SyncRepositoryWorker.perform_async_if_configured(payload['repository'])
     end

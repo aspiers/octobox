@@ -94,10 +94,33 @@ class HooksControllerTest < ActionController::TestCase
     statuses_url = "https://api.github.com/repos/Codertocat/Hello-World/commits/a10867b14bb761a232cd80139fbd4c0d33264240/status"
     response = { status: 200, body: file_fixture('status_request.json'), headers: { 'Content-Type' => 'application/json' } }
     stub_request(:get, statuses_url).and_return(response)
+    stub_request(:get, %r{/repos/Codertocat/Hello-World/statuses/#{subject.sha}})
+      .and_return(status: 200, body: file_fixture('ci_statuses.json'), headers: { 'Content-Type' => 'application/json' })
+    stub_request(:get, %r{/repos/Codertocat/Hello-World/commits/#{subject.sha}/check-runs})
+      .and_return(status: 200, body: file_fixture('ci_check_runs.json'), headers: { 'Content-Type' => 'application/json' })
 
     send_webhook 'status'
     subject.reload
     assert_equal subject.status, 'failure'
+    assert_equal 4, subject.ci_activities.count
+  end
+
+  test 'check_run webhook refreshes CI status through the status worker' do
+    SyncStatusWorker.expects(:perform_async_if_configured).with(
+      'a10867b14bb761a232cd80139fbd4c0d33264240',
+      'Codertocat/Hello-World'
+    )
+
+    send_webhook 'check_run'
+  end
+
+  test 'check_suite webhook refreshes CI status through the status worker' do
+    SyncStatusWorker.expects(:perform_async_if_configured).with(
+      'a10867b14bb761a232cd80139fbd4c0d33264240',
+      'Codertocat/Hello-World'
+    )
+
+    send_webhook 'check_suite'
   end
 
   test 'repository webhook payload' do

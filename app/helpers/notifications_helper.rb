@@ -51,6 +51,37 @@ module NotificationsHelper
     'COMMENTED' => 'dot-fill'
   }
 
+  REACTION_ICONS = {
+    '+1' => ['👍', 'thumbs up'],
+    '-1' => ['👎', 'thumbs down'],
+    'laugh' => ['😄', 'laugh'],
+    'hooray' => ['🎉', 'hooray'],
+    'confused' => ['😕', 'confused'],
+    'heart' => ['❤️', 'heart'],
+    'rocket' => ['🚀', 'rocket'],
+    'eyes' => ['👀', 'eyes']
+  }.freeze
+
+  CI_ACTIVITY_OCTICONS = {
+    'pending' => 'dot-fill',
+    'success' => 'check',
+    'failure' => 'x',
+    'cancelled' => 'circle-slash',
+    'skipped' => 'skip',
+    'neutral' => 'dash',
+    'action_required' => 'alert'
+  }.freeze
+
+  CI_ACTIVITY_TEXT_CLASSES = {
+    'pending' => 'text-warning',
+    'success' => 'text-success',
+    'failure' => 'text-danger',
+    'cancelled' => 'text-muted',
+    'skipped' => 'text-muted',
+    'neutral' => 'text-muted',
+    'action_required' => 'text-warning'
+  }.freeze
+
   def filters
     {
       reason:          params[:reason],
@@ -350,6 +381,35 @@ module NotificationsHelper
 
   def safe_markdown(body)
     sanitize(parse_markdown(body))
+  end
+
+  def reaction_chips(reactable)
+    chips = reactable.reaction_counts.filter_map do |content, count|
+      icon, name = REACTION_ICONS[content]
+      next unless icon
+
+      accessible_name = "#{name}: #{pluralize(count, 'reaction')}"
+      content_tag(:span, class: 'reaction-chip', title: "#{name}: #{count}",
+                         aria: {label: accessible_name}) do
+        safe_join([
+          content_tag(:span, accessible_name, class: 'sr-only'),
+          content_tag(:span, icon, aria: {hidden: true}),
+          content_tag(:span, count, class: 'reaction-count', aria: {hidden: true})
+        ])
+      end
+    end
+    return if chips.empty?
+
+    content_tag(:div, safe_join(chips), class: 'reaction-chips mt-2', role: 'group',
+                                             aria: {label: 'Reactions'})
+  end
+
+  def ci_activity_icon(activity)
+    CI_ACTIVITY_OCTICONS.fetch(activity.outcome)
+  end
+
+  def ci_activity_text_class(activity)
+    CI_ACTIVITY_TEXT_CLASSES.fetch(activity.outcome)
   end
 
   def sidebar_notification_status(status)

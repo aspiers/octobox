@@ -194,7 +194,8 @@ class PullRequestReviewSync
         review_github_id: value(remote_comment, :pull_request_review_id),
         reply_to_github_id: value(remote_comment, :in_reply_to_id),
         thread_github_node_id: graphql_context&.fetch(:thread_id) || comment.thread_github_node_id,
-        review_context: context
+        review_context: context,
+        reactions: ReactionSummary.from(remote_comment)
       }
       assign_remote_attributes(comment, attributes)
       next unless comment.changed?
@@ -401,13 +402,15 @@ class PullRequestReviewSync
       return object[key] if object.key?(key)
       return object[key.to_s] if object.key?(key.to_s)
     end
-    object[key]
-  rescue NoMethodError, TypeError
-    nil
+    object[key] if object.respond_to?(:[])
   end
 
   def log_failure(part, error)
-    Rails.logger.warn("Pull request review #{part} sync failed for #{@subject.url}: #{error.class}: #{error.message}")
+    GithubPreviewFetcher.log_failure(
+      error,
+      operation: "pull_request_review_#{part}",
+      subject_url: @subject.url
+    )
   end
 
   class GraphqlFailure < StandardError; end

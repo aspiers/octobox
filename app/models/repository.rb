@@ -57,8 +57,8 @@ class Repository < ApplicationRecord
     client = app_installation.github_client
     subject_urls.each do |subject_url|
       begin
-        remote_subject = client.get(subject_url)
-        SyncSubjectWorker.perform_async_if_configured(remote_subject.to_h)
+        remote_subject = GithubPreviewFetcher.new(client).resource(subject_url)
+        SyncSubjectWorker.perform_async_if_configured(remote_subject.to_h) if remote_subject
       rescue Octokit::ClientError, Octokit::Forbidden => e
         Rails.logger.warn("\n\n\033[32m[#{Time.current}] WARNING -- #{e.message}\033[0m\n\n")
         nil

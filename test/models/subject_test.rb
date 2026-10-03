@@ -5,6 +5,7 @@ class SubjectTest < ActiveSupport::TestCase
 
   setup do
     stub_include_comments
+    stub_ci_activity_requests
   end
 
   test 'update_labels creates a label when a matching one does not exist' do
@@ -327,7 +328,7 @@ class SubjectTest < ActiveSupport::TestCase
     remote_subject = load_fixture('subject_56.json')
     stub_request(:get, remote_subject['url'])
       .to_return(status: 200, body: file_fixture('subject_56.json'), headers: { 'Content-Type' => 'application/json' })
-    stub_request(:get, remote_subject['url'] + '/comments?since')
+    stub_request(:get, remote_subject['url'] + '/comments?per_page=100&since')
       .to_return(status: 200, body: file_fixture('subject_58_comments.json'), headers: { 'Content-Type' => 'application/json' })
 
     user = build(:user, access_token: nil, personal_access_token: 'FAKE_PERSONAL_ACCESS_TOKEN')
@@ -379,10 +380,38 @@ class SubjectTest < ActiveSupport::TestCase
     client = mock
     client.expects(:get).with(
       'https://api.github.com/repos/octobox/octobox/issues/42/comments',
-      since: issue_comment.created_at
+      {
+        accept: GithubPreviewFetcher::ACCEPT,
+        headers: {'X-GitHub-Api-Version' => GithubPreviewFetcher::API_VERSION},
+        per_page: GithubPreviewFetcher::PAGE_SIZE,
+        since: issue_comment.created_at
+      }
     ).returns([])
+    client.expects(:last_response).returns(nil)
 
-    assert_equal [], subject.send(:download_comments, client)
+    assert_empty subject.send(:download_comments, client).items
+  end
+
+  test 'issue comment failures log safe metadata and return an incomplete result' do
+    subject = create(:subject, url: 'https://api.github.com/repos/octobox/octobox/issues/42')
+    stub_request(:get, subject.url + '/comments').with(query: {per_page: '100', since: nil}).to_return(
+      status: 500,
+      body: 'private response body',
+      headers: {'Content-Type' => 'text/plain', 'Authorization' => 'Bearer secret-token'}
+    )
+    logged = []
+    Rails.logger.stubs(:warn).with { |message| logged << message; true }
+
+    result = subject.send(:download_comments, Octokit::Client.new)
+
+    assert_empty result.items
+    refute result.complete?
+    event = JSON.parse(logged.fetch(0))
+    assert_equal 'issue_comments', event['operation']
+    assert_equal subject.url, event['subject_url']
+    assert_equal 'Octokit::InternalServerError', event['exception']
+    refute_includes logged.first, 'private response body'
+    refute_includes logged.first, 'secret-token'
   end
 
   test 'issue comment persistence is serialized by the subject lock' do
@@ -401,8 +430,14 @@ class SubjectTest < ActiveSupport::TestCase
     client = stub
     client.expects(:get).with(
       'https://api.github.com/repos/octobox/octobox/issues/1/comments',
-      since: nil
+      {
+        accept: GithubPreviewFetcher::ACCEPT,
+        headers: {'X-GitHub-Api-Version' => GithubPreviewFetcher::API_VERSION},
+        per_page: GithubPreviewFetcher::PAGE_SIZE,
+        since: nil
+      }
     ).returns([remote_comment])
+    client.expects(:last_response).returns(nil)
     subject.expects(:github_client).returns(client)
     subject.expects(:with_lock).yields
 

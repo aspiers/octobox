@@ -404,6 +404,7 @@ Then create a new GitHub App, <https://github.com/settings/apps/new>, with the f
   - Issues: write
   - Pull Requests: Read-only
   - Commit statuses: Read-only
+  - Checks: Read-only
 - Subscribe to events: check all available options
 - Where can this GitHub App be installed: Any account if you want to be able to install it on multiple orgs
 

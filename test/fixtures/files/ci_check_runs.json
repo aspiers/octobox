@@ -1,0 +1,37 @@
+{
+  "total_count": 2,
+  "check_runs": [
+    {
+      "id": 8001,
+      "head_sha": "a10867b14bb761a232cd80139fbd4c0d33264240",
+      "name": "Ruby tests",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/octobox/octobox/actions/runs/8001",
+      "started_at": "2026-08-31T10:01:00Z",
+      "completed_at": "2026-08-31T10:06:00Z",
+      "output": {
+        "title": "Test suite passed",
+        "summary": "214 tests passed"
+      },
+      "check_suite": { "id": 8100 },
+      "app": { "name": "GitHub Actions", "slug": "github-actions" }
+    },
+    {
+      "id": 8002,
+      "head_sha": "a10867b14bb761a232cd80139fbd4c0d33264240",
+      "name": "Security review",
+      "status": "completed",
+      "conclusion": "action_required",
+      "details_url": "https://github.com/octobox/octobox/runs/8002",
+      "started_at": "2026-08-31T10:02:00Z",
+      "completed_at": "2026-08-31T10:08:00Z",
+      "output": {
+        "title": "Approval needed",
+        "summary": "A maintainer must approve this run"
+      },
+      "check_suite": { "id": 8101 },
+      "app": { "name": "GitHub Actions", "slug": "github-actions" }
+    }
+  ]
+}

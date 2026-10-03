@@ -1,0 +1,12 @@
+{
+  "action": "completed",
+  "check_suite": {
+    "id": 8100,
+    "head_sha": "a10867b14bb761a232cd80139fbd4c0d33264240",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "repository": {
+    "full_name": "Codertocat/Hello-World"
+  }
+}

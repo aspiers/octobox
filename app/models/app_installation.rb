@@ -93,7 +93,8 @@ class AppInstallation < ApplicationRecord
       target_id: remote_installation['target_id'],
       permission_pull_requests: remote_installation['permissions']['pull_requests'],
       permission_issues: remote_installation['permissions']['issues'],
-      permission_statuses: remote_installation['permissions']['statuses']
+      permission_statuses: remote_installation['permissions']['statuses'],
+      permission_checks: remote_installation['permissions']['checks']
     }
   end
 end

@@ -74,7 +74,7 @@ module StubHelper
       }).merge('event' => 'reviewed')
     end
 
-    stub_request(:get, remote_subject['url'].gsub('/pulls/', '/issues/') + '/comments?since')
+    stub_request(:get, remote_subject['url'].gsub('/pulls/', '/issues/') + '/comments?per_page=100&since')
       .to_return(status: 200, body: file_fixture('subject_58_comments.json'), headers: headers)
     stub_request(:get, %r{/repos/octobox/octobox/issues/1141/timeline\?per_page=100\z})
       .to_return(status: 200, body: Oj.dump(timeline), headers: headers)
@@ -86,10 +86,22 @@ module StubHelper
       .to_return(status: 200, body: file_fixture('subject_58_status.json'), headers: headers)
   end
 
+  def stub_ci_activity_requests(extra_headers: {})
+    headers = { 'Content-Type' => 'application/json' }.merge(extra_headers)
+
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/statuses/[^?]+})
+      .to_return(status: 200, body: '[]', headers: headers)
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/commits/[^/]+/check-runs})
+      .to_return(status: 200, body: '{"total_count":0,"check_runs":[]}', headers: headers)
+    stub_request(:get, %r{/repos/[^/]+/[^/]+/commits/[^/]+/check-suites})
+      .to_return(status: 200, body: '{"total_count":0,"check_suites":[]}', headers: headers)
+  end
+
   def stub_comments_requests(extra_headers: {})
     headers = {'Content-Type' => 'application/json'}.merge(extra_headers)
+    stub_ci_activity_requests(extra_headers: extra_headers)
 
-    stub_request(:get, /\/comments\?since\z/)
+    stub_request(:get, /\/comments\?per_page=100&since\z/)
       .to_return(status: 200, body: file_fixture('comments.json'), headers: headers)
     stub_request(:get, %r{/issues/\d+/timeline\?per_page=100\z})
       .to_return(status: 200, body: '[]', headers: headers)

@@ -32,7 +32,7 @@
 
     <% if @notification.subject && @notification.display? %>
       <div class='discussion-thread'>
-        <% if @notification.subject.body %>
+        <% if @notification.subject.body.present? || @notification.subject.reaction_counts.any? %>
           <div class="card-comment card mt-3">
             <div class="card-header media d-flex align-items-center">
 
@@ -53,9 +53,14 @@
                   </p>
                 <% end %>
               </article>
+              <%= reaction_chips(@notification.subject) %>
             </div>
           </div>
         <% end %>
+        <% if @ci_activities.present? %>
+          <%= render partial: 'ci_activities', locals: { ci_activities: @ci_activities } %>
+        <% end %>
+
         <% if @notification.subject.commentable? %>
           <% if @comments_left_to_load > 0 %>
             <div id='more-comments'>

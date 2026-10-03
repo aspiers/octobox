@@ -10,10 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
-  enable_extension "plpgsql"
 
   create_table "app_installation_permissions", force: :cascade do |t|
     t.integer "app_installation_id"
@@ -35,6 +35,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.string "permission_statuses"
+    t.string "permission_checks"
+  end
+
+  create_table "ci_activities", force: :cascade do |t|
+    t.bigint "subject_id", null: false
+    t.string "kind", null: false
+    t.bigint "github_id", null: false
+    t.string "head_sha", null: false
+    t.string "name", null: false
+    t.string "state"
+    t.string "conclusion"
+    t.text "description"
+    t.text "summary"
+    t.string "app_name"
+    t.bigint "check_suite_id"
+    t.text "target_url"
+    t.datetime "github_created_at"
+    t.datetime "github_updated_at"
+    t.datetime "started_at"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["subject_id", "kind", "github_id"], name: "index_ci_activities_on_subject_kind_github_id", unique: true
   end
 
   create_table "comments", force: :cascade do |t|
@@ -54,6 +77,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
     t.bigint "reply_to_github_id"
     t.string "thread_github_node_id"
     t.jsonb "review_context", default: {}, null: false
+    t.jsonb "reactions", default: {}, null: false
     t.index ["subject_id", "activity_kind", "github_id"], name: "index_comments_on_subject_and_fallback_identity", unique: true, where: "((github_node_id IS NULL) AND (github_id IS NOT NULL) AND (activity_kind IS NOT NULL))"
     t.index ["subject_id", "github_node_id"], name: "index_comments_on_subject_and_node_identity", unique: true, where: "(github_node_id IS NOT NULL)"
     t.index ["subject_id"], name: "index_comments_on_subject_id"
@@ -135,6 +159,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
     t.integer "comment_count"
     t.boolean "draft", default: false
     t.string "title"
+    t.jsonb "reactions", default: {}, null: false
     t.index ["repository_full_name"], name: "index_subjects_on_repository_full_name"
     t.index ["url"], name: "index_subjects_on_url"
   end
@@ -188,5 +213,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_01_000000) do
     t.index ["github_id"], name: "index_users_on_github_id", unique: true
   end
 
+  add_foreign_key "ci_activities", "subjects", on_delete: :cascade
   add_foreign_key "labels", "subjects", on_update: :cascade, on_delete: :cascade
 end
