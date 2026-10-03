@@ -6,6 +6,7 @@ class User < ApplicationRecord
 
   has_secure_token :api_token
   has_many :notifications, dependent: :delete_all
+  has_many :notification_undo_actions, dependent: :delete_all
   has_many :app_installation_permissions, dependent: :delete_all
   has_many :app_installations, through: :app_installation_permissions
   has_many :pinned_searches, dependent: :delete_all

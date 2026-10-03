@@ -12,6 +12,9 @@ var Octobox = (function() {
   };
   var threadRequestSequence = 0;
 
+  var lastUndoAction;
+  var undoGeneration = 0;
+
   var getCsrfToken = function() {
     var meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') : '';
@@ -46,6 +49,104 @@ var Octobox = (function() {
 
     Turbolinks.visit(target.href);
     return true;
+  };
+
+  var rowsForIds = function(ids) {
+    var rows = Array.from(document.querySelectorAll(".js-table-notifications tr.notification"));
+    if (ids === "all") return rows;
+
+    var idList = (Array.isArray(ids) ? ids : [ids]).map(String);
+    return rows.filter(function(row) {
+      var input = row.querySelector("input[type=checkbox]");
+      return input && idList.includes(input.value);
+    });
+  };
+
+  var captureUndoRows = function(actionType, ids) {
+    return {
+      actionType: actionType,
+      search: location.search,
+      generation: undoGeneration,
+      rows: rowsForIds(ids).map(function(row) {
+        var clone = row.cloneNode(true);
+        var currentCell = clone.querySelector("td.js-current");
+        if (currentCell) currentCell.classList.remove("current", "js-current");
+        clone.classList.remove("blur-action");
+        return {
+          node: clone,
+          index: Array.from(row.parentNode.children).indexOf(row),
+          wasCurrent: row === getCurrentRow()
+        };
+      })
+    };
+  };
+
+  var rememberUndo = function(response, snapshot) {
+    if (!snapshot || snapshot.generation !== undoGeneration) return false;
+
+    var token = response.headers.get("X-Octobox-Undo-Token");
+    if (token) {
+      snapshot.token = token;
+      lastUndoAction = snapshot;
+    }
+    return true;
+  };
+
+  var restoreUndoRows = function(snapshot) {
+    var tableBody = document.querySelector(".js-table-notifications tbody");
+    if (!tableBody) return;
+
+    var restoredCurrentId;
+    snapshot.rows.sort(function(left, right) { return left.index - right.index; }).forEach(function(savedRow) {
+      var existing = document.getElementById(savedRow.node.id);
+      if (existing) {
+        existing.replaceWith(savedRow.node);
+      } else {
+        var reference = tableBody.children[savedRow.index] || null;
+        tableBody.insertBefore(savedRow.node, reference);
+      }
+      if (savedRow.wasCurrent) restoredCurrentId = savedRow.node.id;
+    });
+
+    initShiftClickCheckboxes();
+    if (restoredCurrentId) {
+      var restoredCurrent = document.getElementById(restoredCurrentId);
+      markRowCurrent(restoredCurrent);
+      window.current_id = getIdsFromRows([restoredCurrent])[0];
+    }
+    changeArchive();
+  };
+
+  var undoLastAction = function(e) {
+    if (!lastUndoAction) return;
+    if (lastUndoAction.search !== location.search || !document.querySelector(".js-table-notifications")) {
+      lastUndoAction = null;
+      return;
+    }
+
+    e.preventDefault();
+    var action = lastUndoAction;
+    lastUndoAction = null;
+    var formData = new FormData();
+    formData.append("token", action.token);
+
+    postRequest("/notifications/undo", formData)
+    .then(response => {
+      if (!response.ok) throw new Error("Request failed");
+      restoreUndoRows(action);
+      updateFavicon();
+      if (action.actionType === "archive") {
+        notify("Archive undone in Octobox; GitHub may keep it done", "warning");
+      } else if (action.actionType === "mute") {
+        notify("Mute undone; GitHub may keep the notification read", "warning");
+      } else {
+        notify("Action undone", "success");
+      }
+    })
+    .catch(() => {
+      lastUndoAction = action;
+      notify("Could not undo action", "danger");
+    });
   };
 
   var maybeConfirm = function(message){
@@ -213,6 +314,10 @@ var Octobox = (function() {
         openCurrentLink(e);
         return;
       }
+      if (!typing && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        undoLastAction(e);
+        return;
+      }
       if (helpBox && !typing && !interactiveActivation && !e.metaKey) {
         var shortcutMap = (!e.ctrlKey && !e.altKey)
           ? (e.shiftKey ? shiftShortcuts : shortcuts)
@@ -230,6 +335,21 @@ var Octobox = (function() {
         e.preventDefault();
         var reply = document.querySelector('#reply');
         if (reply) reply.requestSubmit();
+      }
+    });
+
+    document.addEventListener("turbolinks:before-visit", function(event) {
+      var nextUrl;
+      try {
+        nextUrl = new URL(event.data.url, window.location.href);
+      } catch {
+        undoGeneration += 1;
+        lastUndoAction = null;
+        return;
+      }
+      if (nextUrl.pathname !== "/" || nextUrl.search !== location.search) {
+        undoGeneration += 1;
+        lastUndoAction = null;
       }
     });
   };
@@ -261,6 +381,7 @@ var Octobox = (function() {
   var mute = function(ids){
     var result = maybeConfirm("Are you sure you want to mute?");
     if (result) {
+      var undoSnapshot = captureUndoRows("mute", ids);
       var formData = new FormData();
       if (Array.isArray(ids)) {
         ids.forEach(id => formData.append('id[]', id));
@@ -271,6 +392,7 @@ var Octobox = (function() {
       postRequest("/notifications/mute_selected" + location.search, formData)
       .then(response => {
         if (response.ok) {
+          if (!rememberUndo(response, undoSnapshot)) return;
           resetCursorAfterRowsRemoved(ids);
           updateFavicon();
         } else {
@@ -416,6 +538,7 @@ var Octobox = (function() {
   }
 
   var archive = function(ids, value, onSuccess){
+    var undoSnapshot = captureUndoRows("archive", ids);
     var formData = new FormData();
     if (Array.isArray(ids)) {
       ids.forEach(id => formData.append('id[]', id));
@@ -427,6 +550,7 @@ var Octobox = (function() {
     postRequest("/notifications/archive_selected" + location.search, formData)
     .then(response => {
       if (response.ok) {
+        if (!rememberUndo(response, undoSnapshot)) return;
         if (onSuccess) {
           onSuccess();
         } else {
@@ -557,6 +681,7 @@ var Octobox = (function() {
   };
 
   var initShiftClickCheckboxes = function() {
+    lastCheckedNotification = null;
     // Remove any existing listeners to avoid duplicates
     document.querySelectorAll(".notification-checkbox .custom-checkbox").forEach(el => {
       el.replaceWith(el.cloneNode(true));
@@ -936,6 +1061,7 @@ var Octobox = (function() {
   var deleteNotifications = function(ids){
     var result = maybeConfirm("Are you sure you want to delete?");
     if (result) {
+      var undoSnapshot = captureUndoRows("delete", ids);
       var formData = new FormData();
       if (Array.isArray(ids)) {
         ids.forEach(id => formData.append('id[]', id));
@@ -946,6 +1072,7 @@ var Octobox = (function() {
       postRequest("/notifications/delete_selected" + location.search, formData)
       .then(response => {
         if (response.ok) {
+          if (!rememberUndo(response, undoSnapshot)) return;
           resetCursorAfterRowsRemoved(ids);
           updateFavicon();
         } else {

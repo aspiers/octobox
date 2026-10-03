@@ -187,6 +187,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
     t.index ["metadata_event_snapshot_id"], name: "index_metadata_events_on_snapshot_id"
   end
 
+  create_table "notification_undo_actions", force: :cascade do |t|
+    t.integer "user_id", null: false
+    t.string "token", null: false
+    t.string "action_type", null: false
+    t.integer "snapshot_version", default: 1, null: false
+    t.jsonb "states", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_notification_undo_actions_on_token", unique: true
+    t.index ["user_id"], name: "index_notification_undo_actions_on_user_id"
+  end
+
   create_table "notifications", id: :serial, force: :cascade do |t|
     t.integer "user_id"
     t.bigint "github_id"
@@ -337,5 +349,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
   add_foreign_key "metadata_event_snapshots", "subjects", on_delete: :cascade
   add_foreign_key "metadata_event_snapshots", "users", column: "viewer_id", on_delete: :cascade
   add_foreign_key "metadata_events", "metadata_event_snapshots", on_delete: :cascade
+  add_foreign_key "notification_undo_actions", "users"
   add_foreign_key "reference_activities", "subjects", on_delete: :cascade
 end
