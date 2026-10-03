@@ -67,6 +67,15 @@
                      reference_activity_count: @reference_activity_count %>
         <% end %>
 
+        <%= render 'notifications/metadata_events',
+                   metadata_events: @metadata_events,
+                   total_count: @metadata_event_total_count,
+                   snapshot: @metadata_event_snapshot if @metadata_event_snapshot %>
+
+        <% if @deployment_snapshot %>
+          <%= render 'deployment_activity', deployment_snapshot: @deployment_snapshot %>
+        <% end %>
+
         <div class="notification-conversation">
           <%= render 'notifications/lifecycle_events',
                      snapshot: @lifecycle_event_snapshot if @notification.subject.issue_or_pull_request? %>

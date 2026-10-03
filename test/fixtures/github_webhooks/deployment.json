@@ -1,0 +1,18 @@
+{
+  "action": "created",
+  "deployment": {
+    "id": 9001,
+    "sha": "a10867b14bb761a232cd80139fbd4c0d33264240",
+    "ref": "feature",
+    "environment": "preview/pr-42"
+  },
+  "repository": {
+    "id": 139431141,
+    "full_name": "octobox/octobox",
+    "private": false
+  },
+  "sender": {
+    "login": "deploy-bot[bot]",
+    "id": 42
+  }
+}

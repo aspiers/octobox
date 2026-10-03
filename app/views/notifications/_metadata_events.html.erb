@@ -1,0 +1,81 @@
+<% if metadata_events.present? %>
+  <section class="metadata-events mt-3" data-status="<%= snapshot.status %>">
+    <h3 class="h6 text-muted">Metadata activity (<%= total_count %>)</h3>
+
+    <% if snapshot.stale_data? %>
+      <p class="small text-warning metadata-events-stale">Activity may be out of date.</p>
+    <% end %>
+
+    <ol class="list-unstyled mb-0">
+      <% metadata_events.each do |event| %>
+        <li class="metadata-event py-2" data-event-type="<%= event.event_type %>" data-event-identity="<%= event.github_identity %>">
+          <%= metadata_event_actor(event) %>
+          <% case event.event_type %>
+          <% when 'renamed' %>
+            renamed this from <q><%= event.before_metadata['title'] %></q>
+            to <q><%= event.after_metadata['title'] %></q>
+          <% when 'labeled', 'unlabeled' %>
+            <%= event.event_type %> this with
+            <span class="metadata-label"><%= (event.after_metadata['label'] || event.before_metadata['label'] || {})['name'] %></span>
+          <% when 'assigned' %>
+            assigned <%= event.after_metadata.dig('assignee', 'login') || 'someone' %>
+          <% when 'unassigned' %>
+            unassigned <%= event.before_metadata.dig('assignee', 'login') || 'someone' %>
+          <% when 'milestoned' %>
+            added this to milestone <q><%= event.after_metadata.dig('milestone', 'title') %></q>
+          <% when 'demilestoned' %>
+            removed this from milestone <q><%= event.before_metadata.dig('milestone', 'title') %></q>
+          <% when 'locked' %>
+            locked this conversation
+            <% if event.after_metadata['reason'].present? %>
+              as <%= event.after_metadata['reason'] %>
+            <% end %>
+          <% when 'unlocked' %>
+            unlocked this conversation
+          <% when 'transferred' %>
+            transferred this
+            <% from_repository = event.before_metadata['repository'] || {} %>
+            <% to_repository = event.after_metadata['repository'] || {} %>
+            <% if from_repository['full_name'].present? %>
+              from
+              <% from_url = metadata_event_safe_url(from_repository['html_url']) %>
+              <% if from_url %>
+                <%= link_to from_repository['full_name'], from_url, target: '_blank', rel: 'noopener' %>
+              <% else %>
+                <%= from_repository['full_name'] %>
+              <% end %>
+            <% end %>
+            <% if to_repository['full_name'].present? %>
+              to
+              <% to_url = metadata_event_safe_url(to_repository['html_url']) %>
+              <% if to_url %>
+                <%= link_to to_repository['full_name'], to_url, target: '_blank', rel: 'noopener' %>
+              <% else %>
+                <%= to_repository['full_name'] %>
+              <% end %>
+            <% end %>
+          <% when 'connected', 'disconnected' %>
+            <%= event.event_type %> this <%= event.event_type == 'connected' ? 'to' : 'from' %>
+            <% source_url = metadata_event_safe_url(event.source_context['url']) %>
+            <% if source_url %>
+              <%= link_to metadata_event_source_label(event), source_url, target: '_blank', rel: 'noopener' %>
+            <% else %>
+              <%= metadata_event_source_label(event) %>
+            <% end %>
+            <% if event.source_context['title'].present? %>
+              <q><%= event.source_context['title'] %></q>
+            <% end %>
+          <% end %>
+
+          <% native_url = metadata_event_safe_url(event.native_url) %>
+          <% if native_url %>
+            <%= link_to time_ago_in_words(event.occurred_at) + ' ago', native_url,
+                        class: 'text-muted metadata-event-time', target: '_blank', rel: 'noopener' %>
+          <% else %>
+            <span class="text-muted metadata-event-time"><%= time_ago_in_words(event.occurred_at) %> ago</span>
+          <% end %>
+        </li>
+      <% end %>
+    </ol>
+  </section>
+<% end %>

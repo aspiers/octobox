@@ -31,6 +31,8 @@ class NotificationsController < ApplicationController
     @conversation_page = conversation_page(@notification, limit: conversation_limit)
     @comments_left_to_load = @conversation_page.remaining_count
 
+    load_metadata_events
+    load_deployment_activity
     render partial: "notifications/thread", layout: false if request.xhr?
   end
 
@@ -45,6 +47,8 @@ class NotificationsController < ApplicationController
     @comments_left_to_load = 0
     @conversation_page = conversation_page(@notification)
 
+    load_metadata_events
+    load_deployment_activity
     render 'notifications/show'
   end
 
@@ -152,6 +156,26 @@ class NotificationsController < ApplicationController
     @lifecycle_events = @lifecycle_event_snapshot.lifecycle_events.to_a
   end
 
+  def load_metadata_events
+    @metadata_events = []
+    @metadata_event_total_count = 0
+    subject = @notification.subject
+    return unless subject&.issue_or_pull_request?
+
+    subject.metadata_event_snapshots.publicly_visible.destroy_all if subject.repository&.private?
+    return unless @notification.display?
+
+    @metadata_event_snapshot = MetadataEventSnapshot.for_presentation(subject, current_user)
+    unless @metadata_event_snapshot&.fresh?
+      viewer = current_user if subject.repository&.private?
+      RefreshMetadataEventsWorker.enqueue(subject, viewer)
+    end
+    return unless @metadata_event_snapshot
+
+    @metadata_events = @metadata_event_snapshot.metadata_events.latest_chronologically(50)
+    @metadata_event_total_count = @metadata_event_snapshot.total_count
+  end
+
   def sync
     if Octobox.background_jobs_enabled?
       current_user.sync_notifications
@@ -206,5 +230,10 @@ class NotificationsController < ApplicationController
     scope = notification.subject.reference_activities
     @reference_activity_count = scope.count
     @reference_activities = scope.recent_first.limit(50).to_a.reverse
+  end
+
+  def load_deployment_activity
+    @deployment_snapshot = DeploymentActivitySnapshot.for_notification(@notification, current_user)
+    @deployment_snapshot&.request_refresh!
   end
 end

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'test_helper'
 
 class HooksControllerTest < ActionController::TestCase
@@ -6,7 +7,7 @@ class HooksControllerTest < ActionController::TestCase
     repository = create(:repository, github_id: 139431141)
     notification = create(:notification, repository_full_name: repository.full_name)
     subject = create(:subject, repository: repository, url: notification.subject_url)
-    label = create(:label, subject: subject, name: ':carrot:')
+    create(:label, subject: subject, name: ':carrot:')
     Notification.any_instance.expects(:update_subject)
     send_webhook 'label'
   end
@@ -20,7 +21,7 @@ class HooksControllerTest < ActionController::TestCase
 
   test 'installation_repositories webhook payload' do
     stub_access_tokens_request
-    app = create(:app_installation, github_id: 293804)
+    create(:app_installation, github_id: 293804)
     send_webhook 'installation_repositories'
     assert_equal Repository.count, 1
   end
@@ -105,6 +106,7 @@ class HooksControllerTest < ActionController::TestCase
         'action' => 'deleted',
         'repository_id' => webhook_payload['repository']['id'],
         'refresh_lifecycle' => false,
+        'refresh_metadata' => false,
         'private_repository' => true
       }
     )
@@ -113,6 +115,20 @@ class HooksControllerTest < ActionController::TestCase
     post :create, body: Oj.dump(webhook_payload)
 
     assert_response :success
+  end
+
+  test 'deployment webhook queues a targeted commit refresh' do
+    RefreshDeploymentActivityForCommitWorker.expects(:perform_async_if_configured).
+      with('octobox/octobox', 'a10867b14bb761a232cd80139fbd4c0d33264240')
+
+    send_webhook 'deployment'
+  end
+
+  test 'deployment status webhook queues a targeted commit refresh' do
+    RefreshDeploymentActivityForCommitWorker.expects(:perform_async_if_configured).
+      with('octobox/octobox', 'a10867b14bb761a232cd80139fbd4c0d33264240')
+
+    send_webhook 'deployment_status'
   end
 
   test 'status webhook payload' do
@@ -166,7 +182,7 @@ class HooksControllerTest < ActionController::TestCase
     webhook_payload = Oj.load(body)
     SyncSubjectWorker.expects(:perform_async_if_configured).with(
       webhook_payload['issue'],
-      { 'refresh_lifecycle' => true, 'private_repository' => true }
+      { 'refresh_lifecycle' => true, 'refresh_metadata' => false, 'private_repository' => true }
     )
 
     @request.headers['X-GitHub-Event'] = 'issues'
@@ -232,6 +248,92 @@ class HooksControllerTest < ActionController::TestCase
 
     @request.headers['X-GitHub-Event'] = 'delete'
     post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+  end
+
+  test 'metadata issue action requests a subject-scoped refresh' do
+    webhook_payload = Oj.load(File.read(file_fixture('../github_webhooks/issues.json')))
+    webhook_payload['action'] = 'labeled'
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(
+      webhook_payload['issue'],
+      { 'refresh_lifecycle' => false, 'refresh_metadata' => true, 'private_repository' => true }
+    )
+
+    @request.headers['X-GitHub-Event'] = 'issues'
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+  end
+
+  test 'title edit requests metadata refresh but lifecycle action does not' do
+    webhook_payload = Oj.load(File.read(file_fixture('../github_webhooks/issues.json')))
+    webhook_payload['action'] = 'edited'
+    webhook_payload['changes'] = { 'title' => { 'from' => 'Old title' } }
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(
+      webhook_payload['issue'],
+      { 'refresh_lifecycle' => false, 'refresh_metadata' => true, 'private_repository' => true }
+    )
+
+    @request.headers['X-GitHub-Event'] = 'issues'
+    post :create, body: Oj.dump(webhook_payload)
+
+    webhook_payload['action'] = 'reopened'
+    webhook_payload.delete('changes')
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(
+      webhook_payload['issue'],
+      { 'refresh_lifecycle' => true, 'refresh_metadata' => false, 'private_repository' => true }
+    )
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+  end
+
+  test 'private issue webhook purges public metadata before scheduling' do
+    webhook_payload = Oj.load(File.read(file_fixture('../github_webhooks/issues.json')))
+    repository = create(:repository, github_id: webhook_payload.dig('repository', 'id'),
+                                     full_name: webhook_payload.dig('repository', 'full_name'),
+                                     private: false)
+    subject = create(:subject, repository: repository, url: webhook_payload.dig('issue', 'url'))
+    snapshot = create(:metadata_event_snapshot, subject: subject)
+    create(:metadata_event, metadata_event_snapshot: snapshot)
+    SyncSubjectWorker.stubs(:perform_async_if_configured)
+
+    @request.headers['X-GitHub-Event'] = 'issues'
+    post :create, body: Oj.dump(webhook_payload)
+
+    refute MetadataEventSnapshot.exists?(snapshot.id)
+    assert repository.reload.private?
+  end
+
+  test 'repository privatization purges public metadata without repository-wide refresh' do
+    repository = create(:repository, full_name: 'octobox/private-now')
+    subject = create(:subject, repository: repository)
+    snapshot = create(:metadata_event_snapshot, subject: subject)
+    create(:metadata_event, metadata_event_snapshot: snapshot)
+    payload = {
+      'action' => 'privatized',
+      'repository' => { 'id' => repository.github_id, 'full_name' => repository.full_name, 'private' => true }
+    }
+    SyncRepositoryWorker.stubs(:perform_async_if_configured)
+    RefreshMetadataEventsWorker.expects(:perform_async_if_configured).never
+
+    @request.headers['X-GitHub-Event'] = 'repository'
+    post :create, body: Oj.dump(payload)
+
+    assert_response :success
+    refute MetadataEventSnapshot.exists?(snapshot.id)
+  end
+
+  test 'push webhook does not amplify into repository-wide metadata refreshes' do
+    SyncSubjectWorker.expects(:perform_async_if_configured).never
+    RefreshMetadataEventsWorker.expects(:perform_async_if_configured).never
+
+    @request.headers['X-GitHub-Event'] = 'push'
+    post :create, body: Oj.dump(
+      'ref' => 'refs/heads/main',
+      'repository' => { 'full_name' => 'octobox/octobox', 'private' => false }
+    )
 
     assert_response :success
   end

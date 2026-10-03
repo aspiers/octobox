@@ -1,0 +1,55 @@
+<% if deployment_snapshot.events.any? || deployment_snapshot.fetched_at || deployment_snapshot.failed_at %>
+  <section class="card mt-3 deployment-activity" aria-labelledby="deployment-activity-heading">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong id="deployment-activity-heading">Deployments</strong>
+      <span class="text-muted">
+        <% if deployment_snapshot.complete? && deployment_snapshot.total_count > DeploymentActivitySnapshot::DISPLAY_LIMIT %>
+          Showing latest <%= deployment_snapshot.events.length %> of <%= deployment_snapshot.total_count %>
+        <% elsif deployment_snapshot.complete? %>
+          <%= pluralize(deployment_snapshot.total_count, 'event') %>
+        <% elsif deployment_snapshot.total_count > deployment_snapshot.events.length %>
+          Showing latest <%= deployment_snapshot.events.length %> of at least <%= deployment_snapshot.total_count %>
+        <% else %>
+          At least <%= pluralize(deployment_snapshot.total_count, 'event') %>
+        <% end %>
+      </span>
+    </div>
+    <ul class="list-group list-group-flush">
+      <% deployment_snapshot.events.each do |event| %>
+        <li class="list-group-item deployment-activity-event" data-event-id="<%= event.fetch('id') %>">
+          <div class="d-flex justify-content-between">
+            <span>
+              <%= octicon('rocket', height: 16, class: 'mr-1') %>
+              <% if event['url'].present? %>
+                <%= link_to event['environment'].presence || 'Deployment', event['url'], target: '_blank', rel: 'noopener noreferrer' %>
+              <% else %>
+                <strong><%= event['environment'].presence || 'Deployment' %></strong>
+              <% end %>
+              <%= event['kind'] == 'deployment_environment_changed' ? 'environment changed' : 'deployed' %>
+              <% if event['outcome'].present? %>
+                <% badge = { 'success' => 'success', 'failure' => 'danger', 'error' => 'danger', 'inactive' => 'secondary', 'pending' => 'warning', 'queued' => 'warning', 'in_progress' => 'info', 'waiting' => 'warning' }.fetch(event['outcome'], 'secondary') %>
+                <span class="badge badge-<%= badge %>"><%= event['outcome'].humanize %></span>
+              <% end %>
+            </span>
+            <% if event['occurred_at'].present? %>
+              <time class="text-muted" datetime="<%= event['occurred_at'] %>"><%= time_ago_in_words(Time.zone.parse(event['occurred_at'])) %> ago</time>
+            <% end %>
+          </div>
+          <% if event['actor_login'].present? %>
+            <small class="text-muted">
+              by
+              <% if event['actor_url'].present? %>
+                <%= link_to event['actor_login'], event['actor_url'], target: '_blank', rel: 'noopener noreferrer', class: 'text-muted' %>
+              <% else %>
+                <%= event['actor_login'] %>
+              <% end %>
+            </small>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+    <% unless deployment_snapshot.complete? %>
+      <div class="card-footer text-muted">Deployment activity may be incomplete. Previously fetched events are retained when GitHub cannot be reached.</div>
+    <% end %>
+  </section>
+<% end %>
