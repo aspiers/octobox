@@ -1,4 +1,9 @@
 class HooksController < ApplicationController
+  LIFECYCLE_ACTIONS = %w[
+    closed reopened converted_to_draft ready_for_review synchronize
+  ].freeze
+  REPOSITORY_LIFECYCLE_EVENTS = %w[push create delete].freeze
+
   skip_before_action :verify_authenticity_token
   skip_before_action :authenticate_user!
   before_action :authenticate_github_request!
@@ -6,10 +11,10 @@ class HooksController < ApplicationController
   def create
     case event_header
     when 'issues'
-      SyncSubjectWorker.perform_async_if_configured(payload['issue'])
+      sync_subject(payload['issue'])
       enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('issue', 'title'), payload.dig('issue', 'body'))
     when 'issue_comment'
-      SyncSubjectWorker.perform_async_if_configured(
+      sync_subject(
         payload['issue'],
         {
           'comment' => payload['comment'],
@@ -19,7 +24,7 @@ class HooksController < ApplicationController
       )
       enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('comment', 'body'))
     when 'pull_request'
-      SyncSubjectWorker.perform_async_if_configured(payload['pull_request'])
+      sync_subject(payload['pull_request'])
       enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('pull_request', 'title'), payload.dig('pull_request', 'body'))
     when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'
       SyncReviewsWorker.perform_async_if_configured(payload['pull_request'])
@@ -59,12 +64,56 @@ class HooksController < ApplicationController
     when 'repository'
       SyncRepositoryWorker.perform_async_if_configured(payload['repository'])
       purge_reference_activity_for_private_repository
+      refresh_repository_lifecycle_events if %w[publicized privatized].include?(payload['action'])
+    end
+
+    # Outside the case so that other handlers for push, create or delete
+    # events cannot shadow the lifecycle refresh.
+    if REPOSITORY_LIFECYCLE_EVENTS.include?(event_header) && ref_event_relevant?
+      refresh_repository_lifecycle_events(active_only: event_header == 'push')
     end
 
     head :no_content
   end
 
   private
+
+  def sync_subject(remote_subject, extra_options = {})
+    Repository.sync(payload['repository']) if payload['repository']
+    options = extra_options.merge(
+      'refresh_lifecycle' => lifecycle_action?,
+      'private_repository' => payload.dig('repository', 'private') == true
+    )
+    LifecycleEventSnapshot.purge_public_for_subject_url(remote_subject['url']) if options['private_repository']
+    SyncSubjectWorker.perform_async_if_configured(remote_subject, options)
+  end
+
+  def lifecycle_action?
+    return true if LIFECYCLE_ACTIONS.include?(payload['action'])
+
+    payload['action'] == 'edited' && payload.dig('changes', 'base').present?
+  end
+
+  def refresh_repository_lifecycle_events(active_only: false)
+    repository = payload['repository'] || {}
+    full_name = repository['full_name']
+    return if full_name.blank?
+
+    Repository.sync(repository)
+    private_repository = repository['private'] == true
+    LifecycleEventSnapshot.purge_public_for_repository(full_name) if private_repository
+    RefreshRepositoryLifecycleEventsWorker.perform_async_if_configured(
+      full_name,
+      private_repository,
+      active_only
+    )
+  end
+
+  def ref_event_relevant?
+    return payload['ref'].to_s.start_with?('refs/heads/') if event_header == 'push'
+
+    payload['ref_type'] == 'branch'
+  end
 
   HMAC_DIGEST = OpenSSL::Digest.new('sha1')
 

@@ -704,9 +704,133 @@ var Octobox = (function() {
           .then(data => {
             var thread = document.getElementById('thread');
             if (thread) thread.innerHTML = data;
+            refreshPendingPreviewSections();
           });
       }
     };
+
+    refreshPendingPreviewSections();
+  };
+
+  var PREVIEW_REFRESH_INTERVAL_MS = 2000;
+  var PREVIEW_REFRESH_MAX_ATTEMPTS = 15;
+
+  var pendingPreviewSections = function() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('#thread [data-preview-section][data-refresh-pending]')
+    );
+  };
+
+  var matchingConversationEntry = function(entry, conversation) {
+    if (!entry) return null;
+    if (entry.id && /^(comment|review|review-thread|review-comment|review-activity)-\d+$/.test(entry.id)) {
+      return conversation.querySelector('#' + entry.id);
+    }
+    if (entry.hasAttribute('data-preview-entry') && entry.dataset.eventIdentity) {
+      return Array.from(conversation.querySelectorAll('[data-preview-entry][data-event-identity]')).find(function(candidate) {
+        return candidate.dataset.eventIdentity === entry.dataset.eventIdentity;
+      });
+    }
+    return null;
+  };
+
+  var replaceConversation = function(conversation, replacement) {
+    var selected = matchingConversationEntry(conversation.querySelector('.js-current-preview-entry'), replacement);
+    var active = document.activeElement;
+    var focused = conversation.contains(active) ? matchingConversationEntry(active, replacement) : null;
+
+    // Restore only UI state by identity, leaving incoming bodies and ordering intact.
+    conversation.querySelectorAll('[data-toggle="collapse"][data-target]').forEach(function(header) {
+      var entry = header.closest('[id], [data-preview-entry]');
+      var freshEntry = matchingConversationEntry(entry, replacement);
+      if (!freshEntry) return;
+      var freshHeader = Array.from(freshEntry.querySelectorAll('[data-toggle="collapse"][data-target]')).find(function(candidate) {
+        return candidate.dataset.target === header.dataset.target;
+      });
+      var panel = entry.querySelector(header.dataset.target);
+      var freshPanel = freshHeader && freshEntry.querySelector(header.dataset.target);
+      if (!panel || !freshPanel) return;
+      var expanded = panel.classList.contains('show');
+      freshPanel.classList.toggle('show', expanded);
+      freshHeader.classList.toggle('collapsed', !expanded);
+      freshHeader.setAttribute('aria-expanded', expanded.toString());
+    });
+    if (selected) {
+      selected.classList.add('js-current-preview-entry');
+      selected.setAttribute('tabindex', '-1');
+    }
+    conversation.replaceWith(replacement);
+    if (focused) {
+      focused.setAttribute('tabindex', '-1');
+      focused.focus({ preventScroll: true });
+    }
+  };
+
+  // Preview sections fetched in the background render a pending marker on
+  // the first view, before their data exists. Re-fetch the thread until the
+  // marker clears so that view still ends up showing the activity.
+  var refreshPendingPreviewSections = function(attempt) {
+    attempt = attempt || 0;
+    var sections = pendingPreviewSections();
+    if (!sections.length) return;
+    if (attempt >= PREVIEW_REFRESH_MAX_ATTEMPTS) {
+      sections.forEach(function(section) {
+        section.querySelectorAll('.preview-section-pending').forEach(function(note) { note.remove(); });
+      });
+      return;
+    }
+    var url = sections[0].dataset.refreshUrl;
+
+    setTimeout(function() {
+      var current = pendingPreviewSections();
+      // The user may have moved to another notification meanwhile.
+      if (!current.length || current[0].dataset.refreshUrl !== url) return;
+
+      var conversations = Array.from(new Set(current.map(function(section) {
+        return section.closest('.notification-conversation');
+      }).filter(Boolean)));
+      var guards = conversations.map(function(conversation) {
+        var guard = { conversation: conversation, changed: false };
+        guard.observer = new MutationObserver(function() { guard.changed = true; });
+        // Content edits invalidate the response; selection and collapse attributes do not.
+        guard.observer.observe(conversation, { childList: true, characterData: true, subtree: true });
+        return guard;
+      });
+
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(response) {
+          if (!response.ok) throw new Error('Request failed');
+          return response.text();
+        })
+        .then(function(html) {
+          guards.forEach(function(guard) {
+            // Drain queued records too, then stop before our own replacement.
+            guard.changed = guard.changed || guard.observer.takeRecords().length > 0;
+            guard.observer.disconnect();
+          });
+          var fresh = new DOMParser().parseFromString(html, 'text/html');
+          current.forEach(function(section) {
+            if (!document.contains(section)) return;
+            // Lifecycle rows share ordering and pagination with comments.
+            var conversation = section.closest('.notification-conversation');
+            var guard = guards.find(function(candidate) { return candidate.conversation === conversation; });
+            // Keep the current pending marker so even a completed stale snapshot is retried.
+            if (guard && guard.changed) return;
+            var selector = conversation ? '.notification-conversation' :
+              '[data-preview-section="' + section.dataset.previewSection + '"]';
+            var replacement = fresh.querySelector(selector);
+            if (replacement) {
+              if (conversation) replaceConversation(conversation, replacement);
+              else section.replaceWith(replacement);
+            }
+          });
+        })
+        .catch(function() {})
+        .finally(function() {
+          guards.forEach(function(guard) { guard.observer.disconnect(); });
+        })
+        .then(function() { refreshPendingPreviewSections(attempt + 1); });
+    }, PREVIEW_REFRESH_INTERVAL_MS);
   };
 
   var deleteNotifications = function(ids){
@@ -768,6 +892,7 @@ var Octobox = (function() {
         } else {
           var thread = document.getElementById('thread');
           if (thread) thread.innerHTML = data;
+          refreshPendingPreviewSections();
         }
       });
 

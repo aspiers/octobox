@@ -93,6 +93,28 @@ class HooksControllerTest < ActionController::TestCase
     send_webhook 'push', 'push_reference'
   end
 
+  test 'private issue comment preserves lifecycle purging and reaction worker options' do
+    webhook_payload = Oj.load(File.read(file_fixture('../github_webhooks/issue_comment.json')))
+    webhook_payload['repository']['private'] = true
+    webhook_payload['action'] = 'deleted'
+    LifecycleEventSnapshot.expects(:purge_public_for_subject_url).with(webhook_payload['issue']['url'])
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(
+      webhook_payload['issue'],
+      {
+        'comment' => webhook_payload['comment'],
+        'action' => 'deleted',
+        'repository_id' => webhook_payload['repository']['id'],
+        'refresh_lifecycle' => false,
+        'private_repository' => true
+      }
+    )
+
+    @request.headers['X-GitHub-Event'] = 'issue_comment'
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+  end
+
   test 'status webhook payload' do
     stub_notifications_request
     stub_repository_request
@@ -137,6 +159,81 @@ class HooksControllerTest < ActionController::TestCase
   test 'repository webhook payload' do
     send_webhook 'repository'
     assert_equal Repository.count, 1
+  end
+
+  test 'reopened issue webhook requests a lifecycle refresh' do
+    body = File.read(file_fixture('../github_webhooks/issues.json'))
+    webhook_payload = Oj.load(body)
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(
+      webhook_payload['issue'],
+      { 'refresh_lifecycle' => true, 'private_repository' => true }
+    )
+
+    @request.headers['X-GitHub-Event'] = 'issues'
+    post :create, body: body
+
+    assert_response :success
+  end
+
+  test 'private issue webhook purges public lifecycle data before scheduling' do
+    webhook_payload = Oj.load(File.read(file_fixture('../github_webhooks/issues.json')))
+    webhook_payload['repository']['private'] = true
+    repository = create(
+      :repository,
+      github_id: webhook_payload['repository']['id'],
+      full_name: webhook_payload['repository']['full_name'],
+      private: false
+    )
+    subject = create(
+      :subject,
+      url: webhook_payload['issue']['url'],
+      repository: repository
+    )
+    snapshot = create(:lifecycle_event_snapshot, subject: subject)
+    create(:lifecycle_event, lifecycle_event_snapshot: snapshot)
+    SyncSubjectWorker.stubs(:perform_async_if_configured)
+
+    @request.headers['X-GitHub-Event'] = 'issues'
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+    refute LifecycleEventSnapshot.exists?(snapshot.id)
+    assert repository.reload.private?
+  end
+
+  test 'push webhook refreshes lifecycle events for repository subjects' do
+    webhook_payload = {
+      'ref' => 'refs/heads/main',
+      'repository' => {
+        'id' => 91_001,
+        'full_name' => 'octobox/webhook-example',
+        'private' => false
+      }
+    }
+    RefreshRepositoryLifecycleEventsWorker.expects(:perform_async_if_configured)
+      .with('octobox/webhook-example', false, true)
+
+    @request.headers['X-GitHub-Event'] = 'push'
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
+  end
+
+  test 'tag delete webhook does not refresh lifecycle events' do
+    webhook_payload = {
+      'ref_type' => 'tag',
+      'repository' => {
+        'id' => 91_002,
+        'full_name' => 'octobox/webhook-tags',
+        'private' => false
+      }
+    }
+    RefreshRepositoryLifecycleEventsWorker.expects(:perform_async_if_configured).never
+
+    @request.headers['X-GitHub-Event'] = 'delete'
+    post :create, body: Oj.dump(webhook_payload)
+
+    assert_response :success
   end
 
   test 'accepts webhook with valid signature when secret is configured' do

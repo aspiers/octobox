@@ -5,12 +5,15 @@ class NotificationConversationPresenter
   Entry = Data.define(:kind, :activity, :threads, :activity_at)
   Thread = Data.define(:root, :replies, :activity_at)
 
-  def initialize(subject)
+  def initialize(subject, lifecycle_events: [])
     @subject = subject
+    @lifecycle_events = lifecycle_events
   end
 
   def page(limit: nil)
-    entries = build_entries.sort_by { |entry| [entry.activity_at, entry.activity.id] }
+    entries = (build_entries + lifecycle_entries).sort_by do |entry|
+      [entry.activity_at, entry.kind == :lifecycle_event ? 1 : 0, entry.activity.id]
+    end
     visible_entries = limit ? entries.last(limit) : entries
     Page.new(
       entries: visible_entries,
@@ -21,7 +24,15 @@ class NotificationConversationPresenter
 
   private
 
+  def lifecycle_entries
+    @lifecycle_events.map do |event|
+      Entry.new(kind: :lifecycle_event, activity: event, threads: [], activity_at: event.occurred_at)
+    end
+  end
+
   def build_entries
+    return [] unless @subject.commentable?
+
     comments = @subject.comments.order(:created_at, :id).to_a.reject do |comment|
       comment.review_state.to_s.upcase == 'PENDING'
     end

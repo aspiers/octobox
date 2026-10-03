@@ -1,0 +1,52 @@
+<div class="lifecycle-event py-2" data-preview-entry data-event-type="<%= event.event_type %>" data-event-identity="<%= event.github_identity %>">
+  <%= lifecycle_event_actor(event) %>
+  <% case event.event_type %>
+  <% when 'closed' %>
+    closed this <%= @notification.subject_type.underscore.humanize.downcase %>
+    <% if event.state_reason_label.present? %>
+      as <%= event.state_reason_label %>
+    <% end %>
+    <% if event.commit_sha.present? %>
+      via commit <%= lifecycle_event_commit_link(event) || event.short_commit_sha %>
+    <% end %>
+  <% when 'reopened' %>
+    reopened this <%= @notification.subject_type.underscore.humanize.downcase %>
+  <% when 'merged' %>
+    merged this pull request
+    <% if event.commit_sha.present? %>
+      as <%= lifecycle_event_commit_link(event) || event.short_commit_sha %>
+    <% end %>
+  <% when 'convert_to_draft' %>
+    converted this pull request to draft
+  <% when 'ready_for_review' %>
+    marked this pull request ready for review
+  <% when 'committed' %>
+    committed <%= lifecycle_event_commit_link(event) || event.short_commit_sha %>
+    <% if event.commit_message.present? %>
+      <span class="text-muted"><%= event.commit_message.lines.first.chomp %></span>
+    <% end %>
+  <% when 'head_ref_deleted' %>
+    deleted the head ref <code><%= event.ref_name %></code>
+  <% when 'head_ref_restored' %>
+    restored the head ref <code><%= event.ref_name %></code>
+  <% when 'head_ref_force_pushed', 'base_ref_force_pushed' %>
+    force-pushed the <%= event.event_type.start_with?('head') ? 'head' : 'base' %> ref
+    <% if event.before_commit_sha.present? && event.after_commit_sha.present? %>
+      from <%= lifecycle_event_commit_link(event, event.before_commit_sha) || event.short_before_commit_sha %>
+      to <%= lifecycle_event_commit_link(event, event.after_commit_sha) || event.short_after_commit_sha %>
+    <% end %>
+  <% when 'base_ref_changed' %>
+    changed the base ref
+    <% if event.previous_ref_name.present? || event.current_ref_name.present? %>
+      from <code><%= event.previous_ref_name %></code> to <code><%= event.current_ref_name %></code>
+    <% end %>
+  <% end %>
+
+  <% native_url = lifecycle_event_native_url(event) %>
+  <% if native_url %>
+    <%= link_to time_ago_in_words(event.occurred_at) + ' ago', native_url,
+                class: 'text-muted lifecycle-event-time', target: '_blank', rel: 'noopener' %>
+  <% else %>
+    <span class="text-muted lifecycle-event-time"><%= time_ago_in_words(event.occurred_at) %> ago</span>
+  <% end %>
+</div>

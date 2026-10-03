@@ -87,6 +87,25 @@ class NotificationConversationPresenterTest < ActiveSupport::TestCase
     assert_empty page.entries
   end
 
+  test 'orders lifecycle events by occurrence time rather than import time with deterministic ties' do
+    subject = create(:subject)
+    comment = create(:comment, subject: subject, created_at: at_minute(5))
+    snapshot = create(:lifecycle_event_snapshot, subject: subject)
+    earlier = create(:lifecycle_event, lifecycle_event_snapshot: snapshot,
+                     github_identity: 'github:earlier', occurred_at: at_minute(1), created_at: at_minute(20))
+    tied = create(:lifecycle_event, lifecycle_event_snapshot: snapshot,
+                  github_identity: 'github:tied', occurred_at: at_minute(5), created_at: at_minute(10))
+    later = create(:lifecycle_event, lifecycle_event_snapshot: snapshot,
+                   github_identity: 'github:later', occurred_at: at_minute(9), created_at: at_minute(2))
+
+    presenter = NotificationConversationPresenter.new(subject, lifecycle_events: [later, tied, earlier])
+    assert_equal [earlier, comment, tied, later], presenter.page.entries.map(&:activity)
+    page = presenter.page(limit: 2)
+    assert_equal [tied, later], page.entries.map(&:activity)
+    assert_equal 2, page.remaining_count
+    assert_equal 4, page.total_count
+  end
+
   private
 
   def at_minute(minute)

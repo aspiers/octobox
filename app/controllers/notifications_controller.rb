@@ -25,6 +25,7 @@ class NotificationsController < ApplicationController
     @ci_activities = ci_activities_for(@notification)
     load_reference_activities(@notification)
 
+    load_lifecycle_events
     comment_count = @notification.subject&.comment_count.to_i
     conversation_limit = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? nil : DEFAULT_COMMENTS_LIMIT
     @conversation_page = conversation_page(@notification, limit: conversation_limit)
@@ -40,6 +41,7 @@ class NotificationsController < ApplicationController
     @ci_activities = ci_activities_for(@notification)
     load_reference_activities(@notification)
 
+    load_lifecycle_events
     @comments_left_to_load = 0
     @conversation_page = conversation_page(@notification)
 
@@ -47,8 +49,8 @@ class NotificationsController < ApplicationController
   end
 
   def conversation_page(notification, limit: nil)
-    if notification.display? && notification.subject&.commentable?
-      NotificationConversationPresenter.new(notification.subject).page(limit: limit)
+    if notification.display? && notification.subject
+      NotificationConversationPresenter.new(notification.subject, lifecycle_events: @lifecycle_events).page(limit: limit)
     else
       NotificationConversationPresenter::Page.new(entries: [], remaining_count: 0, total_count: 0)
     end
@@ -133,6 +135,21 @@ class NotificationsController < ApplicationController
   def star
     @notification.update_columns starred: !@notification.starred?
     head :ok
+  end
+
+  def load_lifecycle_events
+    @lifecycle_events = []
+    return unless @notification.subject&.issue_or_pull_request? && @notification.display?
+
+    subject = @notification.subject
+    @lifecycle_event_snapshot = LifecycleEventSnapshot.for_presentation(subject, current_user)
+    unless @lifecycle_event_snapshot&.fresh?
+      viewer_id = subject.repository&.private? ? current_user.id : nil
+      RefreshLifecycleEventsWorker.perform_async_if_configured(subject.id, viewer_id)
+    end
+    return unless @lifecycle_event_snapshot
+
+    @lifecycle_events = @lifecycle_event_snapshot.lifecycle_events.to_a
   end
 
   def sync

@@ -8,6 +8,15 @@ class SyncSubjectWorker
   # share a single job signature.
   def perform(remote_subject, options = {})
     subject = Subject.sync(remote_subject)
+    if options['refresh_lifecycle'] || options[:refresh_lifecycle]
+      private_repository = options['private_repository']
+      private_repository = options[:private_repository] if private_repository.nil?
+      RefreshLifecycleEventsWorker.schedule_for(
+        subject,
+        private_repository: private_repository
+      )
+    end
+
     remote_comment = options['comment'] || options[:comment]
     return unless remote_comment && Octobox.include_comments?
 

@@ -1,0 +1,14 @@
+<% pending = lifecycle_events_pending?(snapshot) %>
+<% if pending || snapshot&.stale_data? %>
+  <section class="lifecycle-events mt-3"
+           data-preview-section="lifecycle-events"
+           data-status="<%= snapshot&.status || 'pending' %>"
+           <%= 'data-refresh-pending="true"'.html_safe if pending %>
+           data-refresh-url="<%= request.original_fullpath %>">
+    <% if pending %>
+      <p class="small text-muted preview-section-pending lifecycle-events-pending">Checking GitHub for activity&hellip;</p>
+    <% elsif snapshot.stale_data? %>
+      <p class="small text-warning lifecycle-events-stale">Activity may be out of date.</p>
+    <% end %>
+  </section>
+<% end %>

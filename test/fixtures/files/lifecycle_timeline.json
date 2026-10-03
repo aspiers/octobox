@@ -1,0 +1,109 @@
+[
+  {
+    "id": 8101,
+    "node_id": "LE_closed_8101",
+    "event": "closed",
+    "actor": { "login": "octocat" },
+    "commit_id": "1111111111111111111111111111111111111111",
+    "commit_url": "https://api.github.com/repos/octobox/octobox/commits/1111111111111111111111111111111111111111",
+    "state_reason": "not_planned",
+    "created_at": "2026-08-01T09:00:00Z"
+  },
+  {
+    "id": 8102,
+    "node_id": "LE_reopened_8102",
+    "event": "reopened",
+    "actor": { "login": "hubot" },
+    "created_at": "2026-08-01T10:00:00Z"
+  },
+  {
+    "sha": "2222222222222222222222222222222222222222",
+    "node_id": "C_kwDO_commit_2222",
+    "event": "committed",
+    "author": { "name": "Mona Lisa", "email": "mona@example.com", "date": "2026-08-01T11:00:00Z" },
+    "committer": { "name": "Mona Lisa", "email": "mona@example.com", "date": "2026-08-01T11:00:00Z" },
+    "message": "Keep lifecycle history\n\nStore an atomic snapshot.",
+    "html_url": "https://github.com/octobox/octobox/commit/2222222222222222222222222222222222222222"
+  },
+  {
+    "id": 8103,
+    "node_id": "LE_draft_8103",
+    "event": "convert_to_draft",
+    "actor": { "login": "octocat" },
+    "created_at": "2026-08-01T12:00:00Z"
+  },
+  {
+    "id": 8104,
+    "node_id": "LE_ready_8104",
+    "event": "ready_for_review",
+    "actor": { "login": "octocat" },
+    "created_at": "2026-08-01T13:00:00Z"
+  },
+  {
+    "id": 8105,
+    "node_id": "LE_force_8105",
+    "event": "head_ref_force_pushed",
+    "actor": { "login": "hubot" },
+    "before_commit": { "sha": "3333333333333333333333333333333333333333" },
+    "after_commit": { "sha": "4444444444444444444444444444444444444444" },
+    "created_at": "2026-08-01T14:00:00Z"
+  },
+  {
+    "id": 8106,
+    "node_id": "LE_head_deleted_8106",
+    "event": "head_ref_deleted",
+    "actor": { "login": "hubot" },
+    "ref": "feature/lifecycle",
+    "created_at": "2026-08-01T15:00:00Z"
+  },
+  {
+    "id": 8107,
+    "node_id": "LE_head_restored_8107",
+    "event": "head_ref_restored",
+    "actor": { "login": "hubot" },
+    "ref": "feature/lifecycle",
+    "created_at": "2026-08-01T16:00:00Z"
+  },
+  {
+    "id": 8108,
+    "node_id": "LE_base_changed_8108",
+    "event": "base_ref_changed",
+    "actor": { "login": "octocat" },
+    "previous_ref": "main",
+    "current_ref": "stable",
+    "created_at": "2026-08-01T17:00:00Z"
+  },
+  {
+    "id": 8109,
+    "node_id": "LE_base_force_8109",
+    "event": "base_ref_force_pushed",
+    "actor": { "login": "octocat" },
+    "before_commit": { "sha": "5555555555555555555555555555555555555555" },
+    "after_commit": { "sha": "6666666666666666666666666666666666666666" },
+    "created_at": "2026-08-01T18:00:00Z"
+  },
+  {
+    "id": 8110,
+    "node_id": "LE_merged_8110",
+    "event": "merged",
+    "actor": { "login": "maintainer" },
+    "commit_id": "7777777777777777777777777777777777777777",
+    "created_at": "2026-08-01T19:00:00Z"
+  },
+  {
+    "id": 8111,
+    "node_id": "LE_label_8111",
+    "event": "labeled",
+    "actor": { "login": "maintainer" },
+    "label": { "name": "bug", "color": "d73a4a" },
+    "created_at": "2026-08-01T20:00:00Z"
+  },
+  {
+    "id": 8112,
+    "node_id": "LE_assigned_8112",
+    "event": "assigned",
+    "actor": { "login": "maintainer" },
+    "assignee": { "login": "octocat" },
+    "created_at": "2026-08-01T21:00:00Z"
+  }
+]

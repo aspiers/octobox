@@ -1,5 +1,7 @@
 <% conversation_page.entries.each do |entry| %>
-  <% if entry.kind == :issue_comment %>
+  <% if entry.kind == :lifecycle_event %>
+    <%= render 'notifications/lifecycle_event', event: entry.activity %>
+  <% elsif entry.kind == :issue_comment %>
     <%= render 'notifications/issue_comment', comment: entry.activity %>
   <% elsif entry.kind == :review_activity %>
     <%= render 'notifications/review_activity', activity: entry.activity %>
