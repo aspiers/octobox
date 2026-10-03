@@ -1129,7 +1129,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal notification.subject.comments.count, 1
   end
 
-  test 'redirects after a comment is posted over XHR' do
+  test 'renders the comment after it is posted over XHR' do
     stub_fetch_subject_enabled
     sign_in_as(@user)
     subject = create(:subject)
@@ -1142,7 +1142,8 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
          headers: { 'HTTP_REFERER' => notification_url(notification) },
          xhr: true
 
-    assert_redirected_to notification_path(notification)
+    assert_response :success
+    assert_select '.card-comment', text: /blah/
   end
 
   test 'renders the lookup page as json if authenticated' do

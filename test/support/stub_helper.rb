@@ -59,37 +59,56 @@ module StubHelper
   end
 
   def stub_review_requests(remote_subject: nil, remote_reviews: nil, extra_headers: {})
-    
-    headers  = { 'Content-Type' => 'application/json' }.merge(extra_headers)    
-    
-    if remote_subject.nil? || remote_reviews.nil?
-      remote_subject = Oj.load(File.open(file_fixture('subject_58.json')))
-      remote_reviews = Oj.load(File.open(file_fixture('subject_58_reviews.json')))
+    headers = {'Content-Type' => 'application/json'}.merge(extra_headers)
+    remote_subject ||= Oj.load(File.open(file_fixture('subject_58.json')))
+    remote_reviews ||= Oj.load(File.open(file_fixture('subject_58_reviews.json')))
+    review_comments = Oj.load(File.open(file_fixture('subject_58_review_comments.json')))
+    known_review = remote_reviews.index_by { |review| review['id'] }
+    timeline = review_comments.map { |comment| comment['pull_request_review_id'] }.uniq.map do |review_id|
+      (known_review[review_id] || {
+        'id' => review_id,
+        'user' => {'login' => 'reviewer'},
+        'body' => nil,
+        'state' => 'COMMENTED',
+        'submitted_at' => '2018-11-01T00:00:00Z'
+      }).merge('event' => 'reviewed')
     end
-    
-    stub_request(:get, remote_subject["url"].gsub('/pulls/', '/issues/') + '/comments?since')
-        .to_return({ status: 200, body: file_fixture('subject_58_comments.json'), headers: headers })
-    stub_request(:get, remote_subject["url"]+'/comments?since')
-      .to_return({ status: 200, body: file_fixture('subject_58_review_comments.json'), headers: headers })
-    stub_request(:get, remote_subject["url"]+'/reviews?since')
-      .to_return({ status: 200, body: file_fixture('subject_58_reviews.json'), headers: headers })
-    remote_reviews.each do |review|
-      stub_request(:get, review["pull_request_url"]+'/reviews/'+review["id"].to_s+'/comments?since')
-        .to_return({ status: 200, body: file_fixture("subject_58_review_#{review["id"]}.json"), headers: headers })
-    end
+
+    stub_request(:get, remote_subject['url'].gsub('/pulls/', '/issues/') + '/comments?since')
+      .to_return(status: 200, body: file_fixture('subject_58_comments.json'), headers: headers)
+    stub_request(:get, %r{/repos/octobox/octobox/issues/1141/timeline\?per_page=100\z})
+      .to_return(status: 200, body: Oj.dump(timeline), headers: headers)
+    stub_request(:get, remote_subject['url'] + '/comments?per_page=100')
+      .to_return(status: 200, body: file_fixture('subject_58_review_comments.json'), headers: headers)
+    stub_request(:post, 'https://api.github.com/graphql')
+      .to_return(status: 500, body: '{}', headers: headers)
     stub_request(:get, /\/commits\/\w*\/status/)
-      .to_return({ status: 200, body: file_fixture('subject_58_status.json'), headers: { 'Content-Type' => 'application/json' } })
+      .to_return(status: 200, body: file_fixture('subject_58_status.json'), headers: headers)
   end
 
   def stub_comments_requests(extra_headers: {})
-    headers  = { 'Content-Type' => 'application/json' }.merge(extra_headers)
+    headers = {'Content-Type' => 'application/json'}.merge(extra_headers)
 
     stub_request(:get, /\/comments\?since\z/)
-      .to_return({ status: 200, body: file_fixture('comments.json'), headers: headers })
-    stub_request(:get, /\/reviews\?since\z/)
-      .to_return({ status: 200, body: file_fixture('comments.json'), headers: headers })
+      .to_return(status: 200, body: file_fixture('comments.json'), headers: headers)
+    stub_request(:get, %r{/issues/\d+/timeline\?per_page=100\z})
+      .to_return(status: 200, body: '[]', headers: headers)
+    stub_request(:get, %r{/pulls/\d+/comments\?per_page=100\z})
+      .to_return(status: 200, body: '[]', headers: headers)
     stub_request(:get, /\/commits\/\w*\/status/)
-    .to_return({ status: 200, body: file_fixture('comments.json'), headers: headers })
+      .to_return(status: 200, body: file_fixture('comments.json'), headers: headers)
+  end
+
+  def empty_review_threads_response
+    {
+      'data' => {
+        'repository' => {
+          'pullRequest' => {
+            'reviewThreads' => {'nodes' => [], 'pageInfo' => {'hasNextPage' => false}}
+          }
+        }
+      }
+    }
   end
 
   def stub_access_tokens_request(extra_headers: {})

@@ -25,6 +25,36 @@ document.addEventListener('submit', function(event) {
   if (event.target.matches('#search')) {
     SearchSuggestion.addSearchString(document.querySelector("#search-box").value);
   }
+
+  if (event.target.matches('#reply')) {
+    if (event.target.dataset.submitting === 'true') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    event.target.dataset.submitting = 'true';
+  }
+}, true);
+
+// jquery-ujs emits these events through jQuery rather than the DOM.
+$(document).on('ajax:success', '#reply', function(_event, data) {
+  var parsedResponse = new DOMParser().parseFromString(data, 'text/html');
+  var comment = parsedResponse.body.firstElementChild;
+  var discussionThread = document.querySelector('.discussion-thread');
+  var conversation = discussionThread && (discussionThread.querySelector('.notification-conversation') || discussionThread);
+  if (comment && /^comment-\d+$/.test(comment.id) && conversation) {
+    var renderedComment = document.querySelector('#' + comment.id);
+    if (!renderedComment) {
+      conversation.append(comment);
+      renderedComment = comment;
+    }
+    renderedComment.scrollIntoView({block: 'nearest'});
+    this.reset();
+  }
+});
+
+$(document).on('ajax:complete', '#reply', function() {
+  delete this.dataset.submitting;
 });
 
 document.addEventListener('click', function(event) {

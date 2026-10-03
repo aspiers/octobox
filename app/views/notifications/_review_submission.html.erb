@@ -1,0 +1,14 @@
+<div id="review-<%= review.id %>" class="card-comment card mt-3">
+  <div class="card-header media d-flex align-items-center text-muted">
+    <%= image_tag(avatar_url(review.author), width: 20, class: 'mr-3 align-self-center', alt: '') %>
+    <div class="media-body">
+      <%= comment_status(review.review_state) %>
+      <b><%= review.author %></b> <%= review_state_text(review.review_state) %>
+      <span><%= time_ago_in_words(review.created_at) %> ago</span>
+      <%= link_to 'View review', review.web_url, class: 'float-right', target: '_blank', rel: 'noopener' %>
+    </div>
+  </div>
+  <% if review.body.present? %>
+    <div class="card-body markdown-body"><%= safe_markdown(review.body) %></div>
+  <% end %>
+</div>

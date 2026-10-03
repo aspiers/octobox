@@ -23,15 +23,10 @@ class NotificationsController < ApplicationController
 
     load_notification_navigation(scope)
 
-    if @notification.subject && @notification.subject.commentable?
-      comment_count = @notification.subject.comment_count.to_i
-      comments_loaded = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? comment_count : DEFAULT_COMMENTS_LIMIT
-      @comments = @notification.subject.comments.order('created_at DESC').limit(comments_loaded).reverse
-      @comments_left_to_load = comment_count - comments_loaded
-      @comments_left_to_load = 0 if @comments_left_to_load < 0
-    else
-      @comments = []
-    end
+    comment_count = @notification.subject&.comment_count.to_i
+    conversation_limit = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? nil : DEFAULT_COMMENTS_LIMIT
+    @conversation_page = conversation_page(@notification, limit: conversation_limit)
+    @comments_left_to_load = @conversation_page.remaining_count
 
     render partial: "notifications/thread", layout: false if request.xhr?
   end
@@ -42,25 +37,42 @@ class NotificationsController < ApplicationController
     load_notification_navigation(scope)
 
     @comments_left_to_load = 0
-
-    if @notification.subject
-      @comments = @notification.subject.comments.order('created_at ASC')
-    else
-      @comments = []
-    end
+    @conversation_page = conversation_page(@notification)
 
     render 'notifications/show'
   end
+
+  def conversation_page(notification, limit: nil)
+    if notification.display? && notification.subject&.commentable?
+      NotificationConversationPresenter.new(notification.subject).page(limit: limit)
+    else
+      NotificationConversationPresenter::Page.new(entries: [], remaining_count: 0, total_count: 0)
+    end
+  end
+
+  private :conversation_page
 
   def comment
     subject = current_user.notifications.find(params[:id]).subject
 
     if current_user.can_comment?(subject)
-      subject.comment(current_user, params[:comment][:body]) if subject.commentable?
-      redirect_back fallback_location: notification_path
+      comment = subject.comment(current_user, params[:comment][:body]) if subject.commentable?
+      if request.xhr?
+        if comment&.persisted?
+          render partial: "notifications/issue_comment", locals: {comment: comment}, layout: false
+        else
+          head :unprocessable_entity
+        end
+      else
+        redirect_back fallback_location: notification_path
+      end
     else
       flash[:error] = 'Could not post your comment'
-      redirect_back fallback_location: notification_path
+      if request.xhr?
+        head :forbidden
+      else
+        redirect_back fallback_location: notification_path
+      end
     end
   end
 

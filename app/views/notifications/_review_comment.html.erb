@@ -1,0 +1,17 @@
+<div id="review-comment-<%= comment.id %>" class="review-comment <%= 'ml-4 border-left pl-3' if reply %>">
+  <div class="media d-flex align-items-center text-muted mb-2">
+    <%= image_tag(avatar_url(comment.author), width: 20, class: 'mr-2 align-self-center', alt: '') %>
+    <div class="media-body">
+      <b><%= comment.author %></b> <%= reply ? 'replied' : 'commented' %>
+      <%= time_ago_in_words(comment.created_at) %> ago
+      <%= link_to 'View', comment.web_url, class: 'float-right', target: '_blank', rel: 'noopener' %>
+    </div>
+  </div>
+  <div class="markdown-body">
+    <% if comment.body.present? %>
+      <%= safe_markdown(comment.body) %>
+    <% else %>
+      <p><i>No description given.</i></p>
+    <% end %>
+  </div>
+</div>

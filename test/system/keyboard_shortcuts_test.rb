@@ -507,6 +507,54 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     create(:notification, user: @user, subject: create(:subject), subject_title: title)
   end
 
+  test 'control-enter submits a preview comment without losing its position' do
+    stub_include_comments
+    stub_fetch_subject_enabled
+    stub_background_jobs_enabled(value: false)
+    Octobox.config.stubs(:push_notifications).returns(false)
+    @user.update!(display_comments: true)
+    subject = create(:subject, body: 'Issue body', comment_count: 1)
+    create(:comment, subject: subject, body: 'Earlier comment')
+    @notification1.update!(subject_url: subject.url, unread: false)
+    stub_request(:post, "#{subject.url}/comments").to_return do
+      sleep 0.2
+      {status: 200, body: file_fixture('new_comment.json'), headers: {'Content-Type' => 'application/json'}}
+    end
+    visit '/'
+
+    find("#notification-#{@notification1.id} .thread-link").click
+    assert_selector '#comment_body', wait: 2
+    page.execute_script(<<~JS)
+      document.querySelector('.discussion-thread').style.minHeight = '2000px';
+      var thread = document.getElementById('thread');
+      thread.scrollTop = thread.scrollHeight;
+    JS
+    find('#comment_body').fill_in with: 'Keyboard reply'
+    initial_scroll_top = page.evaluate_script("document.getElementById('thread').scrollTop")
+    assert_operator initial_scroll_top, :>, 0
+
+    find('#comment_body').send_keys :control, :enter
+
+    assert_selector '.card-comment', text: 'Keyboard reply', wait: 2
+    assert_field 'comment_body', with: '', wait: 2
+    final_scroll_top = page.evaluate_script("document.getElementById('thread').scrollTop")
+    assert_operator final_scroll_top, :>, 0
+    assert page.evaluate_script(<<~JS)
+      (function() {
+        var threadBounds = document.getElementById('thread').getBoundingClientRect();
+        var comment = Array.from(document.querySelectorAll('.card-comment')).find(function(element) {
+          return element.textContent.includes('Keyboard reply');
+        });
+        var commentBounds = comment.getBoundingClientRect();
+        return commentBounds.top < threadBounds.bottom && commentBounds.bottom > threadBounds.top;
+      })()
+    JS
+    assert_requested :post, "#{subject.url}/comments", times: 1
+    assert subject.comments.exists?(body: 'Keyboard reply')
+    page.refresh
+    assert_selector '.card-comment', text: 'Keyboard reply', visible: :all, wait: 2
+  end
+
   def send_keys(*keys)
     find('body').send_keys(*keys)
   end

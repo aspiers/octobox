@@ -350,7 +350,65 @@ class SubjectTest < ActiveSupport::TestCase
 
     subject.sync(remote_subject)
 
-    assert_equal 24, subject.comments.count
+    assert_equal 32, subject.comments.count
+  end
+
+  test 'issue comment cursor ignores reviews and unclassified legacy rows' do
+    subject = create(
+      :subject,
+      url: 'https://api.github.com/repos/octobox/octobox/pulls/42'
+    )
+    issue_comment = create(
+      :comment,
+      subject: subject,
+      activity_kind: 'issue_comment',
+      created_at: Time.zone.parse('2026-01-01 10:00:00')
+    )
+    create(
+      :comment,
+      subject: subject,
+      activity_kind: 'pull_request_review',
+      created_at: Time.zone.parse('2026-01-01 11:00:00')
+    )
+    create(
+      :comment,
+      subject: subject,
+      activity_kind: nil,
+      created_at: Time.zone.parse('2026-01-01 12:00:00')
+    )
+    client = mock
+    client.expects(:get).with(
+      'https://api.github.com/repos/octobox/octobox/issues/42/comments',
+      since: issue_comment.created_at
+    ).returns([])
+
+    assert_equal [], subject.send(:download_comments, client)
+  end
+
+  test 'issue comment persistence is serialized by the subject lock' do
+    subject = create(:subject, url: 'https://api.github.com/repos/octobox/octobox/issues/1')
+    remote_comment = stub(
+      id: 42,
+      node_id: 'ISSUE_COMMENT_42',
+      user: stub(login: 'reviewer'),
+      url: 'https://api.github.com/repos/octobox/octobox/issues/comments/42',
+      html_url: 'https://github.com/octobox/octobox/issues/1#issuecomment-42',
+      body: 'comment body',
+      author_association: 'CONTRIBUTOR',
+      created_at: Time.current,
+      updated_at: Time.current
+    )
+    client = stub
+    client.expects(:get).with(
+      'https://api.github.com/repos/octobox/octobox/issues/1/comments',
+      since: nil
+    ).returns([remote_comment])
+    subject.expects(:github_client).returns(client)
+    subject.expects(:with_lock).yields
+
+    subject.update_comments
+
+    assert_equal 'ISSUE_COMMENT_42', subject.comments.find_by!(github_id: 42).github_node_id
   end
 
   test 'review states are saved is there is a review with a state' do

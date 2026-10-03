@@ -1,0 +1,20 @@
+<% context = activity.review_context %>
+<% requested = context['requested_reviewer'] || context['requested_team'] || {} %>
+<% dismissed = context['dismissed_review'] || {} %>
+<div id="review-activity-<%= activity.id %>" class="review-activity card mt-3">
+  <div class="card-body text-muted">
+    <b><%= activity.author %></b>
+    <% if activity.activity_kind == 'review_requested' %>
+      requested a review from <b><%= requested['login'] || requested['name'] || requested['slug'] || 'an unknown reviewer' %></b>
+    <% elsif activity.activity_kind == 'review_request_removed' %>
+      removed the review request for <b><%= requested['login'] || requested['name'] || requested['slug'] || 'an unknown reviewer' %></b>
+    <% elsif activity.activity_kind == 'review_dismissed' %>
+      dismissed a <b><%= dismissed['state'].to_s.humanize.downcase.presence || 'submitted' %></b> review
+      <% if dismissed['dismissal_message'].present? %>
+        <div class="mt-2 markdown-body"><%= safe_markdown(dismissed['dismissal_message']) %></div>
+      <% end %>
+    <% end %>
+    <span><%= time_ago_in_words(activity.created_at) %> ago</span>
+    <%= link_to 'View on GitHub', activity.web_url, class: 'float-right', target: '_blank', rel: 'noopener' %>
+  </div>
+</div>

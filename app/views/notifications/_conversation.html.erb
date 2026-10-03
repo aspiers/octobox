@@ -1,0 +1,11 @@
+<% conversation_page.entries.each do |entry| %>
+  <% if entry.kind == :issue_comment %>
+    <%= render 'notifications/issue_comment', comment: entry.activity %>
+  <% elsif entry.kind == :review_activity %>
+    <%= render 'notifications/review_activity', activity: entry.activity %>
+  <% elsif entry.kind == :review %>
+    <%= render 'notifications/review_conversation', review: entry.activity, threads: entry.threads %>
+  <% elsif entry.kind == :review_thread %>
+    <%= render 'notifications/review_thread', thread: entry.threads.first %>
+  <% end %>
+<% end %>
