@@ -31,11 +31,12 @@ $notification-items: (
         color: $text-muted;
       }
     }
-    @media (hover: hover) {
-      &:hover, &:focus {
-        box-shadow: 0 1px 5px rgba(27, 31, 35, .15);
-        background: $list-group-action-active-bg;
-      }
+  }
+  @media (hover: hover) {
+    &:not(.keyboard-navigation-active) tr:hover,
+    tr:focus {
+      box-shadow: 0 1px 5px rgba(27, 31, 35, .15);
+      background: $list-group-action-active-bg;
     }
   }
 }
@@ -82,10 +83,10 @@ $notification-items: (
   .table-notifications tr.active td:first-child {
     border-left: 5px solid $list-group-action-active-bg;
   }
-  .table-notifications tr:hover td:first-child {
+  .table-notifications:not(.keyboard-navigation-active) tr:hover td:first-child {
     border-left: 5px solid $list-group-action-hover-color;
   }
-  .table-notifications tr.active:hover td:first-child {
+  .table-notifications:not(.keyboard-navigation-active) tr.active:hover td:first-child {
     border-left: 5px solid $list-group-action-hover-color;
   }
   td.current {

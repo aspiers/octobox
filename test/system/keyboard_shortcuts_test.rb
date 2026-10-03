@@ -6,13 +6,26 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   setup do
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
-    @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
-    @notification2 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Second notification')
-    @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
     @notification1 = create_previewable_notification('First notification')
     @notification2 = create_previewable_notification('Second notification')
     @notification3 = create_previewable_notification('Third notification')
+    page.current_window.resize_to(1400, 900)
     sign_in_as(@user)
+  end
+
+  test 'previews the selected notification on page load' do
+    show_preview_pane
+
+    assert_preview_matches_current_row
+  end
+
+  test 'keeps a directly requested notification selected and previewed' do
+    page.current_window.resize_to(2400, 900)
+    visit "/notifications/#{@notification2.id}"
+
+    assert_equal "notification-#{@notification2.id}", find('td.js-current').ancestor('tr')[:id]
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']"
+    assert_current_path "/notifications/#{@notification2.id}"
   end
 
   test 'j moves cursor down the list' do
@@ -24,6 +37,131 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     new_current = find('td.js-current').ancestor('tr')
     refute_equal initial_row[:id], new_current[:id]
+  end
+
+  test 'moving the cursor previews the newly selected notification' do
+    show_preview_pane
+    initial_row = find('td.js-current').ancestor('tr')
+
+    send_keys 'j'
+
+    assert_preview_matches_current_row
+    refute_equal initial_row[:id], find('td.js-current').ancestor('tr')[:id]
+  end
+
+  test 'keeps the preview on the latest selection when responses arrive out of order' do
+    show_preview_pane
+    rows = all('tr.notification')
+    delayed_id = rows[1][:id].delete_prefix('notification-')
+    page.execute_script(<<~JS)
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        var delay = String(url).includes('/notifications/#{delayed_id}') ? 300 : 0;
+        return new Promise(function(resolve, reject) {
+          setTimeout(function() {
+            originalFetch(url, options).then(resolve, reject);
+          }, delay);
+        });
+      };
+    JS
+
+    send_keys 'j'
+    send_keys 'j'
+    sleep 0.5
+
+    assert_preview_matches_current_row
+  end
+
+  test 'clicking a row previews that notification' do
+    show_preview_pane
+    target_row = all('tr.notification')[1]
+    page.execute_script("document.querySelector('##{target_row[:id]} td.notification-repo').click()")
+
+    assert_equal target_row[:id], find('td.js-current').ancestor('tr')[:id]
+    assert_preview_matches_current_row
+  end
+
+  test 'renders preview errors as text' do
+    show_preview_pane
+    target_row = all('tr.notification')[1]
+    error_message = '<img src=x onerror="document.body.dataset.xss=true">'
+    page.execute_script(<<~JS)
+      var originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (String(url).includes('/notifications/#{target_row[:id].delete_prefix('notification-')}')) {
+          return Promise.resolve(new Response(
+            JSON.stringify({ error: #{error_message.to_json} }),
+            { headers: { 'content-type': 'application/json' } }
+          ));
+        }
+        return originalFetch(url, options);
+      };
+      Octobox.markRowCurrent(document.querySelector('##{target_row[:id]}'));
+    JS
+
+    assert_text error_message
+    assert_no_selector '.header-flash-messages img', visible: :all
+    assert_nil page.evaluate_script('document.body.dataset.xss')
+  end
+
+  test 'rejects external pagination targets' do
+    page.execute_script(<<~JS)
+      var item = document.createElement('div');
+      item.className = 'page-item next';
+      var link = document.createElement('a');
+      link.className = 'page-link';
+      link.rel = 'next';
+      link.href = 'https://example.com/phishing';
+      item.appendChild(link);
+      document.body.appendChild(item);
+    JS
+
+    send_keys 'n'
+
+    assert_current_path '/'
+    page.execute_script("document.querySelector('.page-link[rel=next]').href = '/settings'")
+    send_keys 'n'
+    assert_current_path '/settings', wait: 2
+  end
+
+  test 'clicking a row action keeps the current selection and preview' do
+    show_preview_pane
+    current_row = find('td.js-current').ancestor('tr')
+    target_row = all('tr.notification').find { |row| row[:id] != current_row[:id] }
+
+    target_row.find('.toggle-star').click
+
+    assert_equal current_row[:id], find('td.js-current').ancestor('tr')[:id]
+    assert_preview_matches_current_row
+  end
+
+  test 'archiving previews the next selected notification' do
+    show_preview_pane
+    archived_row = find('td.js-current').ancestor('tr')
+
+    send_keys 'e'
+
+    assert_no_selector "##{archived_row[:id]}", wait: 5
+    assert_preview_matches_current_row
+  end
+
+  test 'pointer hover stays hidden after keyboard navigation until the mouse moves' do
+    hovered_row = all('tr.notification').last
+    hovered_row.hover
+    refute_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+
+    send_keys 'j'
+
+    table = find('.table-notifications')
+    assert_includes table[:class], 'keyboard-navigation-active'
+    assert_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+    selected_row_id = find('td.js-current').ancestor('tr')[:id]
+
+    page.execute_script("document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))")
+
+    refute_includes table[:class], 'keyboard-navigation-active'
+    refute_equal 'none', page.evaluate_script("getComputedStyle(document.querySelector('##{hovered_row[:id]}')).boxShadow")
+    assert_equal selected_row_id, find('td.js-current').ancestor('tr')[:id]
   end
 
   test 'k moves cursor up the list' do
@@ -575,6 +713,17 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     assert_no_selector "#notification-#{@notification1.id}.active"
     refute @notification1.reload.unread?
+  end
+
+  def show_preview_pane
+    page.current_window.resize_to(2400, 900)
+    visit '/'
+  end
+
+  def assert_preview_matches_current_row
+    current_row = find('td.js-current').ancestor('tr')
+    notification_id = current_row[:id].delete_prefix('notification-')
+    assert_selector "#notification-thread[data-id='#{notification_id}']", wait: 2
   end
 
   def send_keys(*keys)
