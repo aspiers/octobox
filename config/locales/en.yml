@@ -64,6 +64,7 @@ en:
       clear_personal_access_token: 'Clear personal access token'
       account: 'Account'
       repos: 'Repos'
+      all_repos: 'All repos'
       billing: 'Billing'
       settings: 'Settings'
     notices:

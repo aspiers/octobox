@@ -216,7 +216,11 @@
                     <%= app_installation.account_login %>
                   </td>
                   <td class="align-middle">
-                    <%= pluralize app_installation.repositories.github_app_installed.count, 'repo' %>
+                    <% if app_installation.all_repositories? %>
+                      <%= t('users.labels.all_repos') %>
+                    <% else %>
+                      <%= pluralize app_installation.repositories.github_app_installed.count, 'repo' %>
+                    <% end %>
                   </td >
                   <% if Octobox.io? %>
                     <td class="align-middle">

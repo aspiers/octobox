@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -36,6 +36,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
     t.datetime "updated_at", precision: nil, null: false
     t.string "permission_statuses"
     t.string "permission_checks"
+    t.string "repository_selection"
   end
 
   create_table "ci_activities", force: :cascade do |t|
@@ -99,7 +100,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
     t.index ["subject_id", "authorization_type", "authorization_id"], name: "index_deployment_snapshots_on_authorized_scope", unique: true, where: "(authorization_id IS NOT NULL)"
     t.index ["subject_id", "authorization_type"], name: "index_deployment_snapshots_on_public_scope", unique: true, where: "(authorization_id IS NULL)"
     t.index ["subject_id"], name: "index_deployment_activity_snapshots_on_subject_id"
-    t.check_constraint "authorization_type::text = 'public'::text AND authorization_id IS NULL OR (authorization_type::text = ANY (ARRAY['user'::character varying::text, 'installation'::character varying::text])) AND authorization_id IS NOT NULL", name: "deployment_snapshot_authorization_scope"
+    t.check_constraint "authorization_type::text = 'public'::text AND authorization_id IS NULL OR (authorization_type::text = ANY (ARRAY['user'::character varying, 'installation'::character varying]::text[])) AND authorization_id IS NOT NULL", name: "deployment_snapshot_authorization_scope"
   end
 
   create_table "labels", force: :cascade do |t|
