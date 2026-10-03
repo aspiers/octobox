@@ -7,7 +7,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     stub_include_comments
     @user = create(:user, disable_confirmations: true)
     @notification1 = create(:notification, user: @user, subject: create(:subject), subject_title: 'First notification')
-    @notification2 = create(:notification, user: @user, subject_title: 'Second notification')
+    @notification2 = create(:notification, user: @user, subject: create(:subject), subject_title: 'Second notification')
     @notification3 = create(:notification, user: @user, subject_title: 'Third notification')
     sign_in_as(@user)
   end
@@ -51,9 +51,118 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_no_selector '#help-box.show', wait: 2
   end
 
-  test 'slash focuses search box' do
+  test 'slash focuses search box and disables shortcuts while typing' do
     send_keys '/'
     assert_equal 'search-box', page.evaluate_script('document.activeElement.id')
+
+    find('#search-box').send_keys 'gi'
+
+    assert_no_selector '#command-palette.show'
+    assert_current_path '/'
+  end
+
+  test 'g chords navigate directly to fixed sidebar destinations' do
+    {
+      'a' => /archive=true/,
+      's' => /starred=true/,
+      'r' => /unread=false/,
+      'u' => /unread=true/
+    }.each do |key, expected_path|
+      visit '/'
+      send_keys 'g'
+      assert_no_selector '#command-palette.show'
+      send_keys key
+      assert_current_path expected_path, wait: 2
+    end
+
+    send_keys 'g'
+    send_keys 'i'
+    assert_current_path '/', wait: 2
+  end
+
+  test 'unknown and timed-out g chords do not trigger or poison shortcuts' do
+    current_row = find('td.js-current').ancestor('tr')
+    checkbox = current_row.find('input[type="checkbox"]', visible: :all)
+
+    send_keys 'g'
+    send_keys 'x'
+    refute checkbox.checked?
+
+    send_keys 'x'
+    assert checkbox.checked?
+    send_keys 'x'
+
+    send_keys 'g'
+    page.execute_script("setTimeout(function() { document.body.dataset.gotoTimeout = 'done'; }, 1100);")
+    assert_selector "body[data-goto-timeout='done']", visible: :all, wait: 2
+    send_keys 'x'
+    assert checkbox.checked?
+  end
+
+  test 'command palette ranks prefix matches before other substring matches' do
+    page.execute_script(<<~JS)
+      var links = document.querySelectorAll('.flex-sidebar a.nav-link');
+      links[0].textContent = 'Contains target';
+      links[1].textContent = 'Target starts here';
+    JS
+
+    send_keys :control, 'k'
+    find('#command-palette-input').fill_in with: 'target'
+
+    matches = all('.command-palette-item').map(&:text)
+    assert_equal ['Target starts here', 'Contains target'], matches
+  end
+
+  test 'control-k opens the command palette and arrow keys change selection' do
+    send_keys :control, 'k'
+    assert_selector '#command-palette.show', wait: 2
+
+    input = find('#command-palette-input')
+    initial_selection = find('.command-palette-item.active').text
+    assert_equal 'Inbox', initial_selection
+    input.send_keys :down
+
+    refute_equal initial_selection, find('.command-palette-item.active').text
+    selected_item = find('.command-palette-item.active')
+    selected_item.send_keys :escape
+    assert_no_selector '#command-palette.show', wait: 2
+
+    page.execute_script(<<~JS)
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'k', metaKey: true, bubbles: true, cancelable: true
+      }));
+    JS
+    assert_selector '#command-palette.show', wait: 2
+  end
+
+  test 'command shortcut is not intercepted on pages without the palette' do
+    visit '/settings'
+
+    prevented = page.evaluate_script(<<~JS)
+      (function() {
+        var event = new KeyboardEvent('keydown', {
+          key: 'k', ctrlKey: true, bubbles: true, cancelable: true
+        });
+        document.body.dispatchEvent(event);
+        return event.defaultPrevented;
+      })()
+    JS
+
+    refute prevented
+  end
+
+  test 'turbolinks does not cache an open command palette' do
+    send_keys :control, 'k'
+    assert_selector '#command-palette.show', wait: 2
+
+    page.execute_script("Turbolinks.visit('/settings')")
+    assert_current_path '/settings', wait: 2
+    page.go_back
+    assert_current_path '/', wait: 2
+
+    assert_no_selector '#command-palette.show'
+    assert_no_selector '.modal-backdrop'
+    refute page.evaluate_script("document.body.classList.contains('modal-open')")
   end
 
   test 'x toggles checkbox on current row' do
@@ -82,6 +191,79 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     star = current_row.find('.toggle-star')
     assert_includes star[:class], 'star-active'
+  end
+
+  test 'enter opens current notification in the Octobox preview' do
+    current_row = make_current(@notification1)
+    assert_selector "##{current_row[:id]} a.thread-link"
+    assert_no_selector '.flex-main.show-thread'
+
+    send_keys :enter
+
+    assert_selector '.flex-main.show-thread', wait: 2
+    assert_selector '#notification-thread'
+  end
+
+  test 'brackets open the previous and next notifications in the preview' do
+    make_current(@notification2)
+    send_keys :enter
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+
+    previous_href = find('#thread a.previous.btn-outline-dark')[:href]
+    previous_id = previous_href[%r{/notifications/(\d+)}, 1]
+
+    send_keys '['
+    assert_selector "#notification-thread[data-id='#{previous_id}']", wait: 2
+
+    send_keys ']'
+    assert_selector "#notification-thread[data-id='#{@notification2.id}']", wait: 2
+  end
+
+  test 'c focuses the reply composer in an open preview' do
+    Octobox.stubs(:fetch_subject?).returns(true)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#comment_body', wait: 2
+
+    send_keys 'c'
+
+    assert_equal 'comment_body', page.evaluate_script('document.activeElement.id')
+  end
+
+  test 'home and end move to the preview boundaries' do
+    page.current_window.resize_to(2400, 900)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#notification-thread', wait: 2
+    add_preview_spacer
+
+    send_keys :end
+    maximum_scroll = page.evaluate_script("document.getElementById('thread').scrollHeight - document.getElementById('thread').clientHeight")
+    assert_in_delta maximum_scroll, preview_scroll_top, 2
+
+    send_keys :home
+    assert_in_delta 0, preview_scroll_top, 2
+  ensure
+    page.current_window.resize_to(1400, 900)
+  end
+
+  test 'caret and G move to the preview boundaries like home and end' do
+    page.current_window.resize_to(2400, 900)
+    make_current(@notification1)
+    send_keys :enter
+    assert_selector '#notification-thread', wait: 2
+    add_preview_spacer
+
+    # Sent as shift-chords: Playwright drops a bare 'G' and sends '^' without
+    # the shift modifier a real keyboard sets.
+    send_keys [:shift, 'g']
+    maximum_scroll = page.evaluate_script("document.getElementById('thread').scrollHeight - document.getElementById('thread').clientHeight")
+    assert_in_delta maximum_scroll, preview_scroll_top, 2
+
+    send_keys [:shift, '6']
+    assert_in_delta 0, preview_scroll_top, 2
+  ensure
+    page.current_window.resize_to(1400, 900)
   end
 
   test 'preview scrolling shortcuts move by full and half pages' do
@@ -169,11 +351,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_selector '.flex-main.show-thread', wait: 2
     assert_selector '#notification-thread'
 
-    page.execute_script(<<~JS)
-      var spacer = document.createElement('div');
-      spacer.style.height = '5000px';
-      document.getElementById('notification-thread').appendChild(spacer);
-    JS
+    add_preview_spacer
   end
 
   def shortcut_prevented?(which, target: 'document.body', ctrl: false, shift: false, alt: false, meta: false)
@@ -197,6 +375,14 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
   def make_current(notification)
     page.execute_script("Octobox.markRowCurrent(document.getElementById('notification-#{notification.id}'))")
     find("#notification-#{notification.id}")
+  end
+
+  def add_preview_spacer
+    page.execute_script(<<~JS)
+      var spacer = document.createElement('div');
+      spacer.style.height = '5000px';
+      document.getElementById('notification-thread').appendChild(spacer);
+    JS
   end
 
   def preview_scroll_top

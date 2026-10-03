@@ -97,6 +97,7 @@ You can use keyboard shortcuts to navigate and perform certain actions:
  - `r` or `.` - Refresh list
  - `j` - Move down the list
  - `k` - Move up the list
+ - `g` or `Cmd/Ctrl-k` - Find and open a sidebar item
  - `s` - Star current notification
  - `x` - Mark/unmark current notification
  - `y` or `e` - Archive current/marked notification(s)
