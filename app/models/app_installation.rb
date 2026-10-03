@@ -51,6 +51,7 @@ class AppInstallation < ApplicationRecord
   def sync
     remote_installation = Octobox.github_app_client.installation(github_id)
     update(AppInstallation.map_from_api(remote_installation))
+    sync_repositories
   rescue Octokit::NotFound
     destroy
   end
@@ -58,6 +59,10 @@ class AppInstallation < ApplicationRecord
   def sync_repositories
     remote_repositories = github_client.list_app_installation_repositories.repositories
     add_repositories(remote_repositories)
+    # Repositories the installation lost access to are unlinked rather than
+    # destroyed: their notifications and subjects are still useful without
+    # the app.
+    repositories.where.not(github_id: remote_repositories.map { |r| r['id'] }).update_all(app_installation_id: nil)
   rescue Octokit::ClientError
     nil
   end
@@ -79,6 +84,7 @@ class AppInstallation < ApplicationRecord
     remote_installations.each do |remote_installation|
       app_installation = AppInstallation.find_or_initialize_by(github_id: remote_installation.id)
       app_installation.update(AppInstallation.map_from_api(remote_installation))
+      app_installation.sync_repositories
     end
   end
 

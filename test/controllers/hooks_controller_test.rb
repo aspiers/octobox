@@ -47,9 +47,13 @@ class HooksControllerTest < ActionController::TestCase
     app = create(:app_installation, github_id: 293804, permission_pull_requests: 'read')
     response = { status: 200, body: file_fixture('app_installation.json'), headers: { 'Content-Type' => 'application/json' } }
     stub_request(:get, "https://api.github.com/app/installations/293804").and_return(response)
+    repositories = { total_count: 1, repositories: [{ id: 186853002, full_name: 'Codertocat/Hello-World', private: false }] }
+    stub_request(:get, "https://api.github.com/installation/repositories?per_page=100")
+      .and_return(status: 200, body: repositories.to_json, headers: { 'Content-Type' => 'application/json' })
     send_webhook 'installation', 'installation_update'
     app.reload
     assert_equal app.permission_pull_requests, "write"
+    assert_equal ['Codertocat/Hello-World'], app.repositories.pluck(:full_name)
   end
 
   test 'private issues webhook does not queue shared reference refreshes' do

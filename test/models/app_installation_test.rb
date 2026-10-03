@@ -39,4 +39,37 @@ class AppInstallationTest < ActiveSupport::TestCase
     assert_equal large_github_id, app_installation.account_id
     assert_equal large_github_id, app_installation.target_id
   end
+
+  test 'sync_repositories links accessible repositories and unlinks the rest' do
+    linked = create(:repository, app_installation: @app_installation, full_name: 'andrew/kept')
+    lost = create(:repository, app_installation: @app_installation, full_name: 'andrew/lost')
+    remote = [
+      { 'id' => linked.github_id, 'full_name' => 'andrew/kept', 'private' => false },
+      { 'id' => 999_999_999, 'full_name' => 'andrew/new', 'private' => true }
+    ]
+    client = mock
+    client.stubs(:list_app_installation_repositories).returns(stub(repositories: remote))
+    @app_installation.stubs(:github_client).returns(client)
+
+    @app_installation.sync_repositories
+
+    assert_equal ['andrew/kept', 'andrew/new'], @app_installation.repositories.order(:full_name).pluck(:full_name)
+    assert_nil lost.reload.app_installation_id
+  end
+
+  test 'sync_all syncs repositories for every installation' do
+    remote_installation = {
+      'id' => @app_installation.github_id,
+      'app_id' => 1,
+      'account' => { 'login' => 'andrew', 'id' => 1060, 'type' => 'User' },
+      'target_type' => 'User',
+      'target_id' => 1060,
+      'permissions' => {}
+    }
+    remote_installation.define_singleton_method(:id) { self['id'] }
+    Octobox.stubs(:github_app_client).returns(stub(find_app_installations: [remote_installation]))
+    AppInstallation.any_instance.expects(:sync_repositories).once
+
+    AppInstallation.sync_all
+  end
 end
