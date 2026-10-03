@@ -490,4 +490,38 @@ class NotificationTest < ActiveSupport::TestCase
     notification.destroy
     refute Subject.where(id: subject.id).empty?
   end
+
+  test 'update_from_api_response stores CheckSuite notifications despite a null subject url' do
+    stub_fetch_subject_enabled(value: false)
+    user = create(:user)
+    api_response = notifications_from_fixture('check_suite_notifications.json').first
+    assert_nil api_response.subject.url, 'fixture should mirror GitHub sending a null subject url'
+
+    n = user.notifications.find_or_initialize_by(github_id: api_response[:id])
+    n.update_from_api_response(api_response)
+
+    assert n.persisted?, "expected the notification to be saved, errors: #{n.errors.full_messages.inspect}"
+    assert_equal 'CheckSuite', n.subject_type
+    assert_equal 'https://github.com/octobox/octobox/actions', n.subject_url
+  end
+
+  test 'update_from_api_response logs and returns false when a notification cannot be saved' do
+    stub_fetch_subject_enabled(value: false)
+    user = create(:user)
+    api_response = notifications_from_fixture('morty_notifications.json').second
+    api_response.subject.url = nil
+    api_response.subject.type = 'UnknownThing'
+
+    n = user.notifications.find_or_initialize_by(github_id: api_response[:id])
+    logged = []
+    Rails.logger.stubs(:warn).with { |msg| logged << msg.to_s; true }
+
+    assert_equal false, n.update_from_api_response(api_response)
+
+    refute n.persisted?
+    assert logged.any? { |msg| msg.include?('Discarding notification') },
+           "expected a discard warning, got #{logged.inspect}"
+    assert logged.any? { |msg| msg.include?("Subject url can't be blank") },
+           "expected the validation error to be logged, got #{logged.inspect}"
+  end
 end

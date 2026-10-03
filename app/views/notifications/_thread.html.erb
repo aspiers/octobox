@@ -24,13 +24,13 @@
     </div>
   </div>
 
-  <div id='notification-thread' class="p-3 mb-5" data-id='<%= @notification.id %>' data-subject-id='<%= @notification.subject.try(:id) %>'>
+  <div id='notification-thread' class="p-3 mb-5" data-id='<%= @notification.id %>' data-subject-id='<%= @notification.subject.try(:id) unless @notification.ci_workflow_preview? %>'>
 
     <div id='thread-subject'>
       <%= render 'thread_subject', notification: @notification %>
     </div>
 
-    <% if @notification.subject && @notification.display? %>
+    <% if !@notification.ci_workflow_preview? && @notification.subject && @notification.display? %>
       <div class='discussion-thread'>
         <% if @notification.subject.body.present? || @notification.subject.reaction_counts.any? %>
           <div class="card-comment card mt-3">
@@ -97,7 +97,7 @@
       <% if current_user.can_comment?(@notification.subject)%>
         <%= render partial: 'reply', locals: {notification: @notification} %>
       <% end %>
-    <% elsif @notification.subject %>
+    <% elsif !@notification.ci_workflow_preview? && @notification.subject %>
       <div class='card mt-3'>
         <div class='card-body'>
           <%= render 'notifications/private_repos' %>

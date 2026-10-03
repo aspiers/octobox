@@ -3,7 +3,9 @@
 require "test_helper"
 
 class CommentsChannelTest < ActionCable::Channel::TestCase
-
+  setup do
+    stub_include_comments
+  end
 
   test "Reject subscriptions without a current user" do
     stub_connection current_user: nil

@@ -1,3 +1,10 @@
+<% if notification.ci_workflow_preview? %>
+  <% if notification.display_thread? %>
+    <%= render 'notifications/ci_workflow_preview', notification: notification %>
+  <% elsif !notification.display? %>
+    <%= render 'notifications/private_repos' %>
+  <% end %>
+<% else %>
 <h2>
   <%= notification.subject_title %>
   <span class='text-muted font-weight-light'> #<%= notification.subject_number %> </span>
@@ -34,3 +41,4 @@ on <%= link_to notification.repository_full_name, notification.repo_url, class: 
     </div>
   <% end %>
 </div>
+<% end %>

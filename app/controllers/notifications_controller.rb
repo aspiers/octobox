@@ -22,9 +22,13 @@ class NotificationsController < ApplicationController
     scope = request.xhr? ? current_notifications(scope) : load_and_count_notifications(scope)
 
     load_notification_navigation(scope)
+    if @notification.ci_workflow_preview?
+      render partial: 'notifications/thread', layout: false if request.xhr?
+      return
+    end
+
     @ci_activities = ci_activities_for(@notification)
     load_reference_activities(@notification)
-
     load_lifecycle_events
     comment_count = @notification.subject&.comment_count.to_i
     conversation_limit = comment_count <= COMMENTS_AUTOLOAD_LIMIT ? nil : DEFAULT_COMMENTS_LIMIT
@@ -37,8 +41,10 @@ class NotificationsController < ApplicationController
   end
 
   def expand_comments
-    scope = load_and_count_notifications(notifications_for_presentation.newest)
+    @notification = current_user.notifications.find(params[:id])
+    return head :unprocessable_entity if @notification.ci_workflow_preview?
 
+    scope = load_and_count_notifications(notifications_for_presentation.newest)
     load_notification_navigation(scope)
     @ci_activities = ci_activities_for(@notification)
     load_reference_activities(@notification)
@@ -63,7 +69,10 @@ class NotificationsController < ApplicationController
   private :conversation_page
 
   def comment
-    subject = current_user.notifications.find(params[:id]).subject
+    notification = current_user.notifications.find(params[:id])
+    return head :unprocessable_entity if notification.ci_workflow_preview?
+
+    subject = notification.subject
 
     if current_user.can_comment?(subject)
       comment = subject.comment(current_user, params[:comment][:body]) if subject.commentable?
