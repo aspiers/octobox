@@ -118,4 +118,22 @@ class NotificationListTest < ApplicationSystemTestCase
     end
     assert_text 'Starred item'
   end
+
+  test 'view more comments uses full-page navigation' do
+    @user.notifications.delete_all
+    notification = create(:notification, user: @user, subject_title: 'Busy discussion')
+    subject = create(:subject, notifications: [notification], comment_count: 51)
+    51.times { create(:comment, subject: subject) }
+
+    visit notification_path(notification)
+    assert_selector '.card-comment', count: 5
+
+    within '#more-comments' do
+      find("a[href$='#{expand_comments_notification_path(notification)}']").click
+    end
+
+    assert_current_path expand_comments_notification_path(notification)
+    assert_selector '.card-comment', count: 51
+    assert_no_selector '#more-comments'
+  end
 end
