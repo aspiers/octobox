@@ -127,6 +127,11 @@ class NotificationsController < ApplicationController
     head :ok
   end
 
+  def mark_unread_selected
+    Notification.mark_unread(selected_notifications)
+    head :ok
+  end
+
   def delete_selected
     selected_notifications.delete_all
     if request.xhr?

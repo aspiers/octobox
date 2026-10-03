@@ -555,6 +555,28 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_selector '.card-comment', text: 'Keyboard reply', visible: :all, wait: 2
   end
 
+  test 'u marks the current notification unread' do
+    @notification1.update!(unread: false)
+    visit '/'
+    current_row = make_current(@notification1)
+    assert_no_selector "##{current_row[:id]}.active"
+
+    send_keys 'u'
+
+    assert_selector "##{current_row[:id]}.active", wait: 2
+    assert @notification1.reload.unread?
+  end
+
+  test 'u is not intercepted while typing' do
+    @notification1.update!(unread: false)
+    visit '/'
+    send_keys '/'
+    find('#search-box').send_keys 'u'
+
+    assert_no_selector "#notification-#{@notification1.id}.active"
+    refute @notification1.reload.unread?
+  end
+
   def send_keys(*keys)
     find('body').send_keys(*keys)
   end

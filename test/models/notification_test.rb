@@ -73,6 +73,17 @@ class NotificationTest < ActiveSupport::TestCase
     assert_nothing_raised { Notification.mark_read([notification1]) }
   end
 
+  test '#mark_unread marks multiple notifications as unread locally' do
+    user = create(:user)
+    notification1 = create(:notification, user: user, unread: false)
+    notification2 = create(:notification, user: user, unread: false)
+
+    Notification.mark_unread([notification1, notification2])
+
+    assert notification1.reload.unread?
+    assert notification2.reload.unread?
+  end
+
   test 'update_from_api_response updates attributes' do
     stub_fetch_subject_enabled(value: false)
     api_response = notifications_from_fixture('morty_notifications.json').first

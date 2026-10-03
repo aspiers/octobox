@@ -277,6 +277,18 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
+  test 'marks unread multiple notifications' do
+    sign_in_as(@user)
+    notification1 = create(:notification, user: @user, unread: false)
+    notification2 = create(:notification, user: @user, unread: false)
+    create(:notification, user: @user, unread: false)
+
+    Notification.expects(:mark_unread).with([notification1, notification2])
+
+    post '/notifications/mark_unread_selected', params: { id: [notification1.id, notification2.id] }
+    assert_response :ok
+  end
+
   test 'toggles starred on a notification' do
     notification = create(:notification, user: @user, starred: false)
 
