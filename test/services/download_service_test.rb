@@ -91,6 +91,32 @@ class DownloadServiceTest < ActiveSupport::TestCase
     assert_equal attrs, attrs.merge(expected_attributes)
   end
 
+  test "#download creates a notification only in the unfiltered fetch with activity since the last sync" do
+    stub_fetch_subject_enabled(value: false)
+    stub_notifications_request(body: file_fixture('morty_notifications.json'))
+    stub_request(:get, %r{\Ahttps://api\.github\.com/notifications})
+      .with(headers: { 'If-Modified-Since' => /.+/ })
+      .to_return(status: 304, body: '')
+    user = create(:morty)
+    user.notifications.destroy_all
+    user.download_service.download
+    assert user.notifications.exists?(github_id: 421)
+  end
+
+  # Deleting only removes the local row and GitHub keeps listing the thread,
+  # so recreating it without new activity would resurrect deleted notifications.
+  test "#download does not recreate a deleted notification without activity since the last sync" do
+    stub_fetch_subject_enabled(value: false)
+    stub_notifications_request(body: file_fixture('morty_notifications.json'))
+    stub_request(:get, %r{\Ahttps://api\.github\.com/notifications})
+      .with(headers: { 'If-Modified-Since' => /.+/ })
+      .to_return(status: 304, body: '')
+    user = create(:morty, last_synced_at: Time.parse('2016-12-20T00:00:00Z'))
+    user.notifications.destroy_all
+    user.download_service.download
+    assert_empty user.notifications
+  end
+
   test "#download will set the url for a Repository invitation correctly" do
     stub_fetch_subject_enabled(value: false)
     stub_notifications_request(body: file_fixture('repository_invitation_notification.json'))
