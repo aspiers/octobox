@@ -9,6 +9,11 @@
   }
 }
 
+.js-current-preview-entry {
+  outline: 2px solid $primary;
+  outline-offset: 2px;
+}
+
 .discussion-thread{
 	position:relative;
 	&:before {

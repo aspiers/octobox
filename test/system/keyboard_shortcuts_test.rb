@@ -164,6 +164,66 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_equal selected_row_id, find('td.js-current').ancestor('tr')[:id]
   end
 
+  test 'shift-j and shift-k navigate preview entries and shift-enter toggles comments' do
+    stub_include_comments
+    @user.update!(display_comments: true)
+    subject = create(:subject, body: 'Description', comment_count: 2)
+    @notification1.update!(subject_url: subject.url)
+    comment = create(:comment, subject: subject, created_at: 2.minutes.ago)
+    next_comment = create(:comment, subject: subject, created_at: 1.minute.ago)
+    visit '/'
+
+    find("#notification-#{@notification1.id} .thread-link").click
+    assert_selector '#notification-thread', wait: 2
+    page.execute_script(<<~JS)
+      var section = document.createElement('section');
+      var list = document.createElement('ol');
+      var activity = document.createElement('li');
+      activity.id = 'preview-activity';
+      activity.textContent = 'Activity';
+      list.appendChild(activity);
+      section.appendChild(list);
+
+      var reference = document.createElement('div');
+      reference.id = 'reference-activity';
+      reference.className = 'list-group-item';
+      reference.textContent = 'Reference';
+      section.appendChild(reference);
+
+      var review = document.createElement('div');
+      review.id = 'review-activity';
+      review.className = 'review-activity card';
+      review.textContent = 'Review';
+
+      var comment = document.getElementById('comment-#{comment.id}');
+      comment.style.minHeight = '2000px';
+      comment.parentElement.insertBefore(section, comment);
+      comment.parentElement.insertBefore(review, comment);
+    JS
+
+    entry_ids = ['', 'preview-activity', 'reference-activity', 'review-activity', "comment-#{comment.id}", "comment-#{next_comment.id}"]
+    entry_ids.each do |entry_id|
+      position_preview_entry_partially_below(entry_id) if entry_id == "comment-#{next_comment.id}"
+      send_keys :shift, 'j'
+      assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+      assert_preview_entry_top_visible(entry_id) if entry_id == "comment-#{comment.id}"
+      assert_preview_entry_bottom_visible(entry_id) if entry_id == "comment-#{next_comment.id}"
+    end
+
+    body_selector = ".comment-#{next_comment.id}.card-body"
+    assert_selector "#{body_selector}.show", visible: :all
+    send_keys :shift, :enter
+    assert_selector "#{body_selector}.collapse:not(.show)", visible: :all, wait: 2
+    send_keys :shift, :enter
+    assert_selector "#{body_selector}.show", visible: :all, wait: 2
+
+    entry_ids.reverse.drop(1).each do |entry_id|
+      send_keys :shift, 'k'
+      assert_equal entry_id, find('.js-current-preview-entry')[:id].to_s
+      assert_preview_entry_top_visible(entry_id) if entry_id == "comment-#{comment.id}"
+    end
+  end
+
   test 'k moves cursor up the list' do
     send_keys 'j'
     sleep 0.1
@@ -182,6 +242,8 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :shift, '/'
     assert_selector '#help-box.show', wait: 2
     assert_text 'Keyboard shortcuts'
+    assert_text 'Move down/up through preview entries'
+    assert_text 'Expand/collapse the current preview entry'
     assert_text 'Mark done on GitHub; returns on new activity'
     assert_text 'Mark done on GitHub, then open the next notification'
     assert_text 'Remove Octobox copy; GitHub unchanged'
@@ -998,6 +1060,38 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     send_keys :control, 'z'
     assert_no_selector "##{first_row_id}"
     assert @notification1.reload.archived?
+  end
+
+  def position_preview_entry_partially_below(entry_id)
+    page.execute_script(<<~JS)
+      var preview = document.getElementById('thread');
+      var entry = document.getElementById('#{entry_id}');
+      preview.scrollTop += entry.getBoundingClientRect().top - preview.getBoundingClientRect().bottom + 10;
+    JS
+  end
+
+  def assert_preview_entry_bottom_visible(entry_id)
+    geometry = page.evaluate_script(<<~JS)
+      (() => {
+        var preview = document.getElementById('thread').getBoundingClientRect();
+        var entry = document.getElementById('#{entry_id}').getBoundingClientRect();
+        return { previewBottom: preview.bottom, entryBottom: entry.bottom };
+      })()
+    JS
+    assert_operator geometry['entryBottom'], :<=, geometry['previewBottom'] + 1, geometry.inspect
+  end
+
+  def assert_preview_entry_top_visible(entry_id)
+    geometry = page.evaluate_script(<<~JS)
+      (() => {
+        var preview = document.getElementById('thread').getBoundingClientRect();
+        var stickyHeader = document.querySelector('#thread .card-thread > .card-header.sticky-top').getBoundingClientRect();
+        var entry = document.getElementById('#{entry_id}').getBoundingClientRect();
+        return { visibleTop: stickyHeader.bottom, previewBottom: preview.bottom, entryTop: entry.top };
+      })()
+    JS
+    assert_operator geometry['entryTop'], :>=, geometry['visibleTop'], geometry.inspect
+    assert_operator geometry['entryTop'], :<, geometry['previewBottom']
   end
 
   def send_keys(*keys)

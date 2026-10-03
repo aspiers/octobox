@@ -1376,6 +1376,70 @@ var Octobox = (function() {
     link.remove();
   };
 
+  var getPreviewEntries = function() {
+    var flexMain = document.querySelector(".flex-main");
+    if (!DOM.thread || !flexMain || !flexMain.classList.contains("show-thread")) return [];
+
+    var discussion = DOM.thread.querySelector(".discussion-thread");
+    if (!discussion) return [];
+
+    var entries = discussion.querySelectorAll([
+      ".card-comment",
+      ".review-activity",
+      ".review-thread",
+      "section li",
+      "section .list-group-item",
+      "[data-preview-entry]"
+    ].join(", "));
+    return Array.from(entries).filter(function(entry) { return entry.offsetParent !== null; });
+  };
+
+  var ensurePreviewEntryTopVisible = function(entry) {
+    var previewRect = DOM.thread.getBoundingClientRect();
+    var stickyHeader = DOM.thread.querySelector(".card-thread > .card-header.sticky-top");
+    var visibleTop = stickyHeader ? stickyHeader.getBoundingClientRect().bottom : previewRect.top + DOM.thread.clientTop;
+    var visibleBottom = previewRect.top + DOM.thread.clientTop + DOM.thread.clientHeight;
+    var entryTop = entry.getBoundingClientRect().top;
+    if (entryTop < visibleTop || entryTop >= visibleBottom) {
+      DOM.thread.scrollTop += entryTop - visibleTop;
+    }
+  };
+
+  var movePreviewEntry = function(e, direction) {
+    var entries = getPreviewEntries();
+    if (!entries.length) return;
+
+    var current = DOM.thread.querySelector(".js-current-preview-entry");
+    var currentIndex = entries.indexOf(current);
+    var targetIndex = currentIndex < 0 ? (direction === "down" ? 0 : entries.length - 1) : currentIndex + (direction === "down" ? 1 : -1);
+    if (targetIndex < 0 || targetIndex >= entries.length) return;
+
+    e.preventDefault();
+    if (current) current.classList.remove("js-current-preview-entry");
+
+    var target = entries[targetIndex];
+    target.classList.add("js-current-preview-entry");
+    target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "nearest" });
+    ensurePreviewEntryTopVisible(target);
+  };
+
+  var togglePreviewEntry = function(e) {
+    var interactive = e.target.closest && e.target.closest("a, button, input, textarea, select, [role='button'], [contenteditable='true']");
+    if (interactive || !DOM.thread) return;
+
+    var current = DOM.thread.querySelector(".js-current-preview-entry");
+    var toggle = current && current.querySelector("[data-toggle='collapse']");
+    if (!toggle) return;
+
+    e.preventDefault();
+    toggle.click();
+  };
+
+  var movePreviewEntryDown = function(e) { movePreviewEntry(e, "down"); };
+  var movePreviewEntryUp = function(e) { movePreviewEntry(e, "up"); };
+
   var notify = function(message, type) {
     document.querySelectorAll(".header-flash-messages").forEach(el => el.remove());
     var flexHeader = document.querySelector(".flex-header");
@@ -1454,12 +1518,15 @@ var Octobox = (function() {
 
   // keyboard shortcuts when shift key is pressed
   var shiftShortcuts = {
+    13: togglePreviewEntry,  // Shift-Enter
     33: scrollThreadHalfPageUp,   // Shift-PageUp
     34: scrollThreadHalfPageDown, // Shift-PageDown
     54: scrollThreadToTop,        // ^ (Shift-6)
     71: scrollThreadToBottom,     // G (Shift-g)
     69: archiveAndAdvance,        // Shift-e
     89: archiveAndAdvance,        // Shift-y
+    74: movePreviewEntryDown,     // Shift-j
+    75: movePreviewEntryUp,       // Shift-k
     191: openModal,               // ?
   }
 
