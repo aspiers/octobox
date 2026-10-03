@@ -58,7 +58,13 @@ class Repository < ApplicationRecord
     subject_urls.each do |subject_url|
       begin
         remote_subject = GithubPreviewFetcher.new(client).resource(subject_url)
-        SyncSubjectWorker.perform_async_if_configured(remote_subject.to_h) if remote_subject
+        # Sawyer::Resource#to_h yields symbol keys, but Subject.sync reads string
+        # keys throughout (as delivered by the webhook path), and Sidekiq rejects
+        # symbols as job arguments. Without this the job dies before it ever runs.
+        # Discussion resources carry no url of their own; use the notification's.
+        if remote_subject
+          SyncSubjectWorker.perform_async_if_configured(remote_subject.to_h.reverse_merge(url: subject_url).deep_stringify_keys)
+        end
       rescue Octokit::ClientError, Octokit::Forbidden => e
         Rails.logger.warn("\n\n\033[32m[#{Time.current}] WARNING -- #{e.message}\033[0m\n\n")
         nil

@@ -5,7 +5,7 @@ class Notification < ApplicationRecord
   include Octobox::Notifications::ExclusiveScope
   include Octobox::Notifications::SyncSubject
 
-  SUBJECTABLE_TYPES = SUBJECT_TYPE_COMMIT_RELEASE + SUBJECT_TYPE_ISSUE_REQUEST
+  SUBJECTABLE_TYPES = SUBJECT_TYPE_COMMIT_RELEASE + SUBJECT_TYPE_ISSUE_REQUEST + SUBJECT_TYPE_DISCUSSION
 
   include PgSearch::Model
   pg_search_scope :search_by_subject_title,

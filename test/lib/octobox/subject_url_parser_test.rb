@@ -90,11 +90,38 @@ class SubjectUrlParserTest < ActiveSupport::TestCase
     assert_release_url parser
   end
 
+  test "to_html_url correctly converts an API discussion URL to an HTML one" do
+    parser = Octobox::SubjectUrlParser.new("https://api.github.com/repos/octocat/Hello-World/discussions/779")
+
+    assert_equal "https://github.com/octocat/Hello-World/discussions/779", parser.to_html_url
+  end
+
+  test "it correctly identifies an API discussion URL" do
+    parser = Octobox::SubjectUrlParser.new("https://api.github.com/repos/octocat/Hello-World/discussions/779")
+
+    assert_discussion_url parser
+  end
+
+  test "it correctly identifies a HTML discussion URL" do
+    parser = Octobox::SubjectUrlParser.new("https://github.com/octocat/Hello-World/discussions/779")
+
+    assert_discussion_url parser
+  end
+
+  def assert_discussion_url(parser)
+    refute parser.pull_request?
+    refute parser.issue?
+    refute parser.commit?
+    refute parser.release?
+    assert parser.discussion?
+  end
+
   def assert_pull_request_url(parser)
     assert parser.pull_request?
     refute parser.issue?
     refute parser.commit?
     refute parser.release?
+    refute parser.discussion?
   end
 
   def assert_issue_url(parser)
@@ -102,6 +129,7 @@ class SubjectUrlParserTest < ActiveSupport::TestCase
     assert parser.issue?
     refute parser.commit?
     refute parser.release?
+    refute parser.discussion?
   end
 
   def assert_commit_url(parser)
@@ -109,6 +137,7 @@ class SubjectUrlParserTest < ActiveSupport::TestCase
     refute parser.issue?
     assert parser.commit?
     refute parser.release?
+    refute parser.discussion?
   end
 
   def assert_release_url(parser)
@@ -116,6 +145,7 @@ class SubjectUrlParserTest < ActiveSupport::TestCase
     refute parser.issue?
     refute parser.commit?
     assert parser.release?
+    refute parser.discussion?
   end
 end
 

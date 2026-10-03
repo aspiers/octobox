@@ -84,7 +84,10 @@ class Subject < ApplicationRecord
     @preferred_github_client = nil
   end
 
-  def self.sync(remote_subject, github_client: nil)
+  # Discussion resources omit their own API url, so callers that know the
+  # notification's subject_url pass it to key the subject on.
+  def self.sync(remote_subject, github_client: nil, url: nil)
+    remote_subject = remote_subject.merge('url' => url) if remote_subject['url'].blank? && url
     subject = Subject.find_or_create_by(url: remote_subject['url'])
     subject.sync(remote_subject, github_client: github_client)
     subject
@@ -117,6 +120,10 @@ class Subject < ApplicationRecord
 
   def issue_or_pull_request?
     url.match?(%r{/issues/|/pulls/})
+  end
+
+  def discussion?
+    url.match?(%r{/discussions/})
   end
 
   def update_status
@@ -267,7 +274,8 @@ class Subject < ApplicationRecord
     elsif remote_subject['full_name']
       remote_subject['full_name']
     else
-      extract_full_name(remote_subject['url'])
+      # discussion resources carry no url of their own
+      extract_full_name(remote_subject['url'] || url)
     end
   end
 

@@ -82,4 +82,43 @@ class RepositoryTest < ActiveSupport::TestCase
     repository = build(:repository, private: false)
     assert repository.display_subject?
   end
+
+  test 'sync_subjects_in_foreground passes string keys to SyncSubjectWorker' do
+    app_installation = create(:app_installation)
+    repository = create(:repository, full_name: 'octobox/subject-sync', app_installation: app_installation)
+    subject_url = 'https://api.github.com/repos/octobox/subject-sync/issues/1'
+    create(:notification, repository_id: repository.github_id,
+                          repository_full_name: repository.full_name,
+                          subject_type: 'Issue', subject_url: subject_url)
+
+    # Sawyer::Resource#to_h hands back symbol keys, unlike the webhook path.
+    remote_subject = Sawyer::Resource.new(Sawyer::Agent.new('https://api.github.com'),
+                                          { url: subject_url, id: 1, state: 'open' })
+    client = mock('client')
+    # The job payload must be independent of optional API headers used to fetch it.
+    client.stubs(:get).with { |requested_url, *_options| requested_url == subject_url }.returns(remote_subject)
+    app_installation.stubs(:github_client).returns(client)
+
+    SyncSubjectWorker.expects(:perform_async_if_configured).with do |payload|
+      assert payload.keys.all? { |key| key.is_a?(String) },
+             "expected string keys, got #{payload.keys.map(&:class).uniq.inspect}"
+      assert_equal subject_url, payload['url']
+      true
+    end
+
+    repository.sync_subjects_in_foreground
+  end
+
+  test 'sync_subjects_in_foreground keys url-less discussion subjects on the notification subject_url' do
+    stub_background_jobs_enabled
+    url = 'https://api.github.com/repos/ente/ente/discussions/779'
+    stub_request(:get, url).to_return(status: 200, body: file_fixture('discussion.json'), headers: { 'Content-Type' => 'application/json' })
+    notification = create(:notification, subject_type: 'Discussion', subject_url: url)
+    repository = notification.repository
+    repository.stubs(:app_installation).returns(stub(github_client: Octokit::Client.new))
+
+    SyncSubjectWorker.expects(:perform_async_if_configured).with(has_entry('url' => url))
+
+    repository.sync_subjects_in_foreground
+  end
 end

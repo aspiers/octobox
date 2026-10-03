@@ -14,7 +14,7 @@ class Comment < ApplicationRecord
     when 'pull_request_review_comment'
       "discussion_r#{github_id}"
     else
-      "issuecomment-#{github_id}"
+      subject.discussion? ? "discussioncomment-#{github_id}" : "issuecomment-#{github_id}"
     end
     "#{subject.html_url}##{anchor}"
   end
