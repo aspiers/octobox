@@ -41,7 +41,9 @@ class HooksControllerTest < ActionController::TestCase
     assert_equal app.permission_pull_requests, "write"
   end
 
-  test 'issues webhook payload' do
+  test 'private issues webhook does not queue shared reference refreshes' do
+    SyncReferencedSubjectsWorker.expects(:perform_async_if_configured).never
+
     send_webhook 'issues'
     assert_equal Subject.count, 1
   end
@@ -80,6 +82,15 @@ class HooksControllerTest < ActionController::TestCase
   test 'issue_comment webhook payload' do
     send_webhook 'issue_comment'
     assert_equal Subject.count, 1
+  end
+
+  test 'push webhook payload refreshes subjects referenced by commits' do
+    SyncReferencedSubjectsWorker.expects(:perform_async_if_configured).with(
+      'example/source',
+      ["Fix the parser\n\nReferences example/target#99 and #41."]
+    )
+
+    send_webhook 'push', 'push_reference'
   end
 
   test 'status webhook payload' do

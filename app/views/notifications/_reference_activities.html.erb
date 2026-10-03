@@ -1,0 +1,56 @@
+<section class="card reference-activities mt-3" aria-labelledby="reference-activities-heading">
+  <div class="card-header py-2 d-flex align-items-center justify-content-between">
+    <strong id="reference-activities-heading">References and mentions</strong>
+    <span class="badge badge-light"><%= reference_activity_count %></span>
+  </div>
+
+  <% if reference_activity_count > reference_activities.length %>
+    <div class="small text-muted px-3 pt-2">
+      Showing the latest <%= reference_activities.length %> of <%= reference_activity_count %>
+    </div>
+  <% end %>
+
+  <div class="list-group list-group-flush">
+    <% reference_activities.each do |activity| %>
+      <div class="list-group-item reference-activity-item py-2" data-reference-type="<%= activity.activity_type.dasherize %>">
+        <div class="d-flex align-items-start justify-content-between">
+          <div class="reference-activity-details">
+            <div>
+              <span class="badge badge-secondary mr-1"><%= activity.activity_type.humanize %></span>
+              <% if activity.safe_native_url %>
+                <%= link_to activity.source_title.presence || activity.source_identifier,
+                            activity.safe_native_url,
+                            target: "_blank",
+                            rel: "noopener noreferrer",
+                            class: "font-weight-bold" %>
+              <% else %>
+                <strong><%= activity.source_title.presence || activity.source_identifier %></strong>
+              <% end %>
+            </div>
+
+            <div class="small text-muted">
+              <%= activity.source_repository_full_name %>
+              <% if activity.source_number.present? %>
+                #<%= activity.source_number %>
+              <% elsif activity.source_identifier.present? %>
+                @<%= activity.source_identifier.first(12) %>
+              <% end %>
+              &middot; <%= activity.source_type.humanize.downcase %>
+              <% if activity.source_author.present? %>
+                &middot; <%= activity.source_author %>
+              <% end %>
+            </div>
+
+            <% if activity.body_snippet.present? %>
+              <div class="small reference-activity-snippet"><%= activity.body_snippet %></div>
+            <% end %>
+          </div>
+
+          <time class="small text-muted ml-2 text-nowrap" datetime="<%= activity.occurred_at.iso8601 %>">
+            <%= time_ago_in_words(activity.occurred_at) %> ago
+          </time>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</section>

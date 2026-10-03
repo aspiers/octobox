@@ -7,6 +7,7 @@ class HooksController < ApplicationController
     case event_header
     when 'issues'
       SyncSubjectWorker.perform_async_if_configured(payload['issue'])
+      enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('issue', 'title'), payload.dig('issue', 'body'))
     when 'issue_comment'
       SyncSubjectWorker.perform_async_if_configured(
         payload['issue'],
@@ -16,10 +17,17 @@ class HooksController < ApplicationController
           'repository_id' => payload.dig('repository', 'id')
         }
       )
+      enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('comment', 'body'))
     when 'pull_request'
       SyncSubjectWorker.perform_async_if_configured(payload['pull_request'])
+      enqueue_reference_refresh(payload.dig('repository', 'full_name'), payload.dig('pull_request', 'title'), payload.dig('pull_request', 'body'))
     when 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread'
       SyncReviewsWorker.perform_async_if_configured(payload['pull_request'])
+      enqueue_reference_refresh(
+        payload.dig('repository', 'full_name'),
+        payload.dig('review', 'body'),
+        payload.dig('comment', 'body')
+      )
     when 'label'
       SyncLabelWorker.perform_async_if_configured(payload) if payload['action'] == 'edited'
     when 'installation'
@@ -43,8 +51,14 @@ class HooksController < ApplicationController
       SyncStatusWorker.perform_async_if_configured(payload.dig('check_run', 'head_sha'), payload.dig('repository', 'full_name'))
     when 'check_suite'
       SyncStatusWorker.perform_async_if_configured(payload.dig('check_suite', 'head_sha'), payload.dig('repository', 'full_name'))
+    when 'push'
+      enqueue_reference_refresh(
+        payload.dig('repository', 'full_name'),
+        *Array(payload['commits']).map { |commit| commit['message'] }
+      )
     when 'repository'
       SyncRepositoryWorker.perform_async_if_configured(payload['repository'])
+      purge_reference_activity_for_private_repository
     end
 
     head :no_content
@@ -53,6 +67,20 @@ class HooksController < ApplicationController
   private
 
   HMAC_DIGEST = OpenSSL::Digest.new('sha1')
+
+  def enqueue_reference_refresh(repository_full_name, *texts)
+    return if payload.dig('repository', 'private')
+    return if repository_full_name.blank? || texts.compact.empty?
+
+    SyncReferencedSubjectsWorker.perform_async_if_configured(repository_full_name, texts.compact)
+  end
+
+  def purge_reference_activity_for_private_repository
+    repository = payload['repository'] || {}
+    return unless repository['private'] || %w[privatized deleted].include?(payload['action'])
+
+    ReferenceActivity.where(source_repository_full_name: repository['full_name']).delete_all
+  end
 
   def authenticate_github_request!
     secret = Octobox.config.github_webhook_secret

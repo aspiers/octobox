@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_02_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -129,6 +129,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.index ["user_id"], name: "index_pinned_searches_on_user_id"
   end
 
+  create_table "reference_activities", force: :cascade do |t|
+    t.bigint "subject_id", null: false
+    t.string "stable_identity", null: false
+    t.bigint "github_id"
+    t.string "github_node_id"
+    t.string "activity_type", null: false
+    t.string "source_type", null: false
+    t.string "source_repository_full_name", null: false
+    t.bigint "source_number"
+    t.string "source_identifier"
+    t.text "source_title"
+    t.string "source_author"
+    t.text "body_snippet"
+    t.text "native_url", null: false
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["subject_id", "occurred_at"], name: "index_reference_activities_on_subject_and_occurred_at"
+    t.index ["subject_id", "stable_identity"], name: "index_reference_activities_on_subject_and_identity", unique: true
+  end
+
   create_table "repositories", force: :cascade do |t|
     t.string "full_name", null: false
     t.bigint "github_id"
@@ -160,6 +181,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
     t.boolean "draft", default: false
     t.string "title"
     t.jsonb "reactions", default: {}, null: false
+    t.datetime "reference_activities_sync_started_at"
     t.index ["repository_full_name"], name: "index_subjects_on_repository_full_name"
     t.index ["url"], name: "index_subjects_on_url"
   end
@@ -215,4 +237,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_010000) do
 
   add_foreign_key "ci_activities", "subjects", on_delete: :cascade
   add_foreign_key "labels", "subjects", on_update: :cascade, on_delete: :cascade
+  add_foreign_key "reference_activities", "subjects", on_delete: :cascade
 end
