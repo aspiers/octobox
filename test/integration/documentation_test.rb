@@ -15,10 +15,12 @@ class DocumentationTest < ActionDispatch::IntegrationTest
     assert_select 'h3', text: 'Syncing'
     assert_select 'h2', text: 'Shortcuts'
     assert_match 'full set of keyboard shortcuts', response.body
-    assert_match 'Move down the list', response.body
-    assert_match 'Move up the list', response.body
-    assert_match 'Star current notification', response.body
-    assert_match 'Mark current notification', response.body
+    assert_select '[data-shortcut="list-navigation"]' do
+      assert_select '.key', text: 'j'
+      assert_select '.key', text: 'k'
+    end
+    assert_select '[data-shortcut="star"] .key', text: 's'
+    assert_select '[data-shortcut="mark"] .key', text: 'x'
     assert_select 'h2', text: 'Navigating Octobox'
     assert_match 'The state of the underlying issue or PR', response.body
     assert_select 'h2', text: 'Searching Octobox'

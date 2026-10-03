@@ -1,198 +1,133 @@
-<table class="keyboard-mappings">
-  <tbody>
-    <tr>
-      <td class="keys">
-        <div class="key">.</div> or <div class="key">r</div>
-      </td>
-      <td>
-        Refresh
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">j</div>
-      </td>
-      <td>
-        Move down the list
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">k</div>
-      </td>
-      <td>
-        Move up the list
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">g i</div>, <div class="key">g a</div>, <div class="key">g s</div>,
-        <div class="key">g r</div>, or <div class="key">g u</div>
-      </td>
-      <td>
-        Go to Inbox, Archive, Starred, Read, or Unread
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">⌘/Ctrl-k</div>
-      </td>
-      <td>
-        Search sidebar items
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">s</div>
-      </td>
-      <td>
-        Star current notification
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">x</div>
-      </td>
-      <td>
-        Mark current notification
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">a</div>
-      </td>
-      <td>
-        Select/deselect all
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">y</div> or <div class="key">e</div>
-      </td>
-      <td>
-        Mark done on GitHub; returns on new activity
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Shift-y</div> or <div class="key">Shift-e</div>
-      </td>
-      <td>
-        Mark done on GitHub, then open the next notification
-      </td>
-    </tr>
-    <tr>
-    <tr>
-      <td class="keys">
-        <div class="key">m</div>
-      </td>
-      <td>
-        Mute current/marked notification(s)
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">d</div>
-      </td>
-      <td>
-        Mark current/marked notification(s) as read here and on GitHub
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">u</div>
-      </td>
-      <td>
-        Mark current/marked notification(s) as unread in Octobox
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">#</div>
-      </td>
-      <td>
-        Remove Octobox copy; GitHub unchanged
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">⌘/Ctrl-z</div>
-      </td>
-      <td>
-        Undo the latest archive, mute, or delete action in Octobox
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Enter</div> or <div class="key">o</div>
-      </td>
-      <td>
-        Open current notification on GitHub in a new window
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">[</div> or <div class="key">]</div>
-      </td>
-      <td>
-        Open the previous or next notification in the preview
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">c</div>
-      </td>
-      <td>
-        Focus the reply composer
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Space</div> or <div class="key">Backspace</div> / <div class="key">b</div>
-      </td>
-      <td>
-        Scroll the notification preview down or up one page
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Shift-PageDown</div> or <div class="key">Shift-PageUp</div>
-      </td>
-      <td>
-        Scroll the notification preview down or up half a page
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Home</div> / <div class="key">^</div> or <div class="key">End</div> / <div class="key">G</div>
-      </td>
-      <td>
-        Scroll to the top or bottom of the notification preview
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">Ctrl-Enter</div> or <div class="key">⌘-Enter</div>
-      </td>
-      <td>
-        Open or reload the current notification preview
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">?</div>
-      </td>
-      <td>
-        Show this help menu
-      </td>
-    </tr>
-    <tr>
-      <td class="keys">
-        <div class="key">esc</div>
-      </td>
-      <td>
-        Close modal, thread OR clear filters
-      </td>
-    </tr>
-  </tbody>
-</table>
+<div class="keyboard-mappings-grid">
+  <section class="keyboard-mappings-group" data-keyboard-group="navigation">
+    <h6>Navigation</h6>
+    <table class="keyboard-mappings">
+      <tbody>
+        <tr data-shortcut="list-navigation">
+          <td class="keys"><div class="key">j</div> or <div class="key">k</div></td>
+          <td>Move down or up the notification list</td>
+        </tr>
+        <tr data-shortcut="page-navigation">
+          <td class="keys"><div class="key">n</div> or <div class="key">p</div></td>
+          <td>Go to the next or previous results page</td>
+        </tr>
+        <tr data-shortcut="sidebar-navigation">
+          <td class="keys"><div class="key">g i</div>, <div class="key">g a</div>, <div class="key">g s</div>, <div class="key">g r</div>, or <div class="key">g u</div></td>
+          <td>Go to Inbox, Archive, Starred, Read, or Unread</td>
+        </tr>
+        <tr data-shortcut="open-notification">
+          <td class="keys"><div class="key">Enter</div> or <div class="key">o</div></td>
+          <td>Open current notification on GitHub in a new window</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="keyboard-mappings-group" data-keyboard-group="search">
+    <h6>Search and refresh</h6>
+    <table class="keyboard-mappings">
+      <tbody>
+        <tr data-shortcut="focus-search">
+          <td class="keys"><div class="key">/</div></td>
+          <td>Focus notification search</td>
+        </tr>
+        <tr data-shortcut="sidebar-search">
+          <td class="keys"><div class="key">⌘/Ctrl-k</div></td>
+          <td>Search sidebar items</td>
+        </tr>
+        <tr data-shortcut="refresh">
+          <td class="keys"><div class="key">.</div> or <div class="key">r</div></td>
+          <td>Refresh notifications</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="keyboard-mappings-group" data-keyboard-group="actions">
+    <h6>Notification actions</h6>
+    <table class="keyboard-mappings">
+      <tbody>
+        <tr data-shortcut="star">
+          <td class="keys"><div class="key">s</div></td>
+          <td>Star the current notification</td>
+        </tr>
+        <tr data-shortcut="mark">
+          <td class="keys"><div class="key">x</div></td>
+          <td>Mark or unmark the current notification</td>
+        </tr>
+        <tr data-shortcut="select-all">
+          <td class="keys"><div class="key">a</div></td>
+          <td>Select or deselect all notifications</td>
+        </tr>
+        <tr data-shortcut="archive">
+          <td class="keys"><div class="key">y</div> or <div class="key">e</div></td>
+          <td>Mark done on GitHub; returns on new activity</td>
+        </tr>
+        <tr data-shortcut="archive-and-advance">
+          <td class="keys"><div class="key">Shift-y</div> or <div class="key">Shift-e</div></td>
+          <td>Mark done on GitHub, then open the next notification</td>
+        </tr>
+        <tr data-shortcut="mute">
+          <td class="keys"><div class="key">m</div></td>
+          <td>Mute current or marked notifications</td>
+        </tr>
+        <tr data-shortcut="mark-read">
+          <td class="keys"><div class="key">d</div></td>
+          <td>Mark current or marked notifications read here and on GitHub</td>
+        </tr>
+        <tr data-shortcut="mark-unread">
+          <td class="keys"><div class="key">u</div></td>
+          <td>Mark current/marked notification(s) as unread in Octobox</td>
+        </tr>
+        <tr data-shortcut="delete">
+          <td class="keys"><div class="key">#</div></td>
+          <td>Remove Octobox copy; GitHub unchanged</td>
+        </tr>
+        <tr data-shortcut="undo">
+          <td class="keys"><div class="key">⌘/Ctrl-z</div></td>
+          <td>Undo the latest archive, mute, or delete action in Octobox</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="keyboard-mappings-group" data-keyboard-group="preview">
+    <h6>Preview and general</h6>
+    <table class="keyboard-mappings">
+      <tbody>
+        <tr data-shortcut="preview-navigation">
+          <td class="keys"><div class="key">[</div> or <div class="key">]</div></td>
+          <td>Open the previous or next notification in the preview</td>
+        </tr>
+        <tr data-shortcut="reply-composer">
+          <td class="keys"><div class="key">c</div></td>
+          <td>Focus the reply composer</td>
+        </tr>
+        <tr data-shortcut="preview-scroll-page">
+          <td class="keys"><div class="key">Space</div> or <div class="key">Backspace</div> / <div class="key">b</div></td>
+          <td>Scroll the notification preview down or up one page</td>
+        </tr>
+        <tr data-shortcut="preview-scroll-half-page">
+          <td class="keys"><div class="key">Shift-PageDown</div> or <div class="key">Shift-PageUp</div></td>
+          <td>Scroll the notification preview down or up half a page</td>
+        </tr>
+        <tr data-shortcut="preview-scroll-boundary">
+          <td class="keys"><div class="key">Home</div> / <div class="key">^</div> or <div class="key">End</div> / <div class="key">G</div></td>
+          <td>Scroll to the top or bottom of the notification preview</td>
+        </tr>
+        <tr data-shortcut="open-preview">
+          <td class="keys"><div class="key">Ctrl-Enter</div> or <div class="key">⌘-Enter</div></td>
+          <td>Open or reload the current notification preview</td>
+        </tr>
+        <tr data-shortcut="help">
+          <td class="keys"><div class="key">?</div></td>
+          <td>Show this help menu</td>
+        </tr>
+        <tr data-shortcut="escape">
+          <td class="keys"><div class="key">Esc</div></td>
+          <td>Close the modal or preview, or clear filters</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>

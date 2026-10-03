@@ -187,6 +187,36 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_text 'Remove Octobox copy; GitHub unchanged'
   end
 
+  test 'help modal groups shortcuts in responsive columns' do
+    page.current_window.resize_to(1200, 900)
+    send_keys :shift, '/'
+    assert_selector '#help-box.show', wait: 2
+
+    groups = all('.keyboard-mappings-group')
+    assert_equal 4, groups.length
+    assert_equal [
+      'Navigation',
+      'Search and refresh',
+      'Notification actions',
+      'Preview and general'
+    ], groups.map { |group| group.find('h6').text }
+
+    shortcuts = all('[data-shortcut]').map { |row| row['data-shortcut'] }
+    assert_operator shortcuts.length, :>=, 14
+    assert_equal shortcuts, shortcuts.uniq
+
+    desktop_columns = page.evaluate_script("getComputedStyle(document.querySelector('.keyboard-mappings-grid')).gridTemplateColumns.split(' ').length")
+    dialog_width = page.evaluate_script("document.querySelector('.keyboard-help-dialog').getBoundingClientRect().width")
+    assert_equal 2, desktop_columns
+    assert_operator dialog_width, :>, 800
+
+    page.current_window.resize_to(600, 900)
+    mobile_columns = page.evaluate_script("getComputedStyle(document.querySelector('.keyboard-mappings-grid')).gridTemplateColumns.split(' ').length")
+    assert_equal 1, mobile_columns
+  ensure
+    page.current_window.resize_to(1400, 900)
+  end
+
   test 'escape closes help modal' do
     send_keys :shift, '/'
     assert_selector '#help-box.show', wait: 2
