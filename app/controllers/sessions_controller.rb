@@ -16,6 +16,8 @@ class SessionsController < ApplicationController
 
     user.sync_notifications unless initial_sync?
     redirect_to url_from(request.env['omniauth.origin']) || root_path
+  rescue User::InvalidGithubAppCredentials
+    failure
   end
 
   def destroy

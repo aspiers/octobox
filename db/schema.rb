@@ -99,7 +99,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
     t.index ["subject_id", "authorization_type", "authorization_id"], name: "index_deployment_snapshots_on_authorized_scope", unique: true, where: "(authorization_id IS NOT NULL)"
     t.index ["subject_id", "authorization_type"], name: "index_deployment_snapshots_on_public_scope", unique: true, where: "(authorization_id IS NULL)"
     t.index ["subject_id"], name: "index_deployment_activity_snapshots_on_subject_id"
-    t.check_constraint "authorization_type::text = 'public'::text AND authorization_id IS NULL OR (authorization_type::text = ANY (ARRAY['user'::character varying, 'installation'::character varying]::text[])) AND authorization_id IS NOT NULL", name: "deployment_snapshot_authorization_scope"
+    t.check_constraint "authorization_type::text = 'public'::text AND authorization_id IS NULL OR (authorization_type::text = ANY (ARRAY['user'::character varying::text, 'installation'::character varying::text])) AND authorization_id IS NOT NULL", name: "deployment_snapshot_authorization_scope"
   end
 
   create_table "labels", force: :cascade do |t|
@@ -336,6 +336,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000000) do
     t.string "theme", default: "light"
     t.boolean "display_comments", default: true
     t.boolean "disable_confirmations", default: false
+    t.string "encrypted_app_refresh_token"
+    t.string "encrypted_app_refresh_token_iv"
+    t.datetime "app_token_expires_at"
     t.index ["api_token"], name: "index_users_on_api_token", unique: true
     t.index ["github_id"], name: "index_users_on_github_id", unique: true
   end

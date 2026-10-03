@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 class User < ApplicationRecord
+  InvalidGithubAppCredentials = Class.new(StandardError)
+
   attr_encrypted :access_token, key: Octobox.config.attr_encryption_key
   attr_encrypted :personal_access_token, key: Octobox.config.attr_encryption_key
   attr_encrypted :app_token, key: Octobox.config.attr_encryption_key
+  attr_encrypted :app_refresh_token, key: Octobox.config.attr_encryption_key
 
   has_secure_token :api_token
   has_many :notifications, dependent: :delete_all
@@ -11,6 +14,8 @@ class User < ApplicationRecord
   has_many :app_installations, through: :app_installation_permissions
   has_many :pinned_searches, dependent: :delete_all
   has_one :individual_subscription_purchase, foreign_key: :account_id, primary_key: :github_id, class_name: 'SubscriptionPurchase'
+
+  APP_TOKEN_REFRESH_WINDOW = 5.minutes
 
   ERRORS = {
     refresh_interval_size: [:refresh_interval, 'must be less than 1 day']
@@ -66,11 +71,18 @@ class User < ApplicationRecord
 
   def assign_from_auth_hash(auth_hash, app = 'github')
     token_field = app == 'github' ? :access_token : :app_token
+    credentials = auth_hash.fetch('credentials')
+    validate_github_app_credentials!(credentials) if app == 'github_app'
     github_attributes = {
       github_id: auth_hash['uid'],
       github_login: auth_hash['info']['nickname'],
-      token_field => auth_hash.dig('credentials', 'token')
+      token_field => credentials['token']
     }
+    if app == 'github_app'
+      github_attributes[:app_refresh_token] = credentials['refresh_token']
+      expires_at = credentials['expires_at']
+      github_attributes[:app_token_expires_at] = expires_at ? Time.zone.at(expires_at.to_i) : nil
+    end
 
     update!(github_attributes)
   end
@@ -112,12 +124,16 @@ class User < ApplicationRecord
   end
 
   def comment_client(comment)
-    return app_installation_client if app_token.present? && comment.subject.repository.commentable?
-    return github_client
+    if app_token.present? && comment.subject.repository.commentable?
+      client = app_installation_client
+      return client if client
+    end
+    github_client
   end
 
   def app_installation_client
-    Octokit::Client.new(access_token: app_token, auto_paginate: true) if app_token.present?
+    token = app_token_for_client
+    Octokit::Client.new(access_token: token, auto_paginate: true) if token.present?
   end
 
   def github_avatar_url
@@ -146,8 +162,11 @@ class User < ApplicationRecord
 
   def sync_app_installation_access
     return unless github_app_authorized?
+    client = app_installation_client
+    return unless client
+
     rejected_encrypted_app_token = encrypted_app_token
-    remote_installs = app_installation_client.find_user_installations
+    remote_installs = client.find_user_installations
     app_installations = AppInstallation.where(github_id: remote_installs[:installations].map(&:id))
     app_installations.each do |app_installation|
       app_installation_permissions.find_or_create_by(app_installation_id: app_installation.id)
@@ -168,7 +187,17 @@ class User < ApplicationRecord
     with_lock do
       return false if expected_encrypted_app_token && encrypted_app_token != expected_encrypted_app_token
 
-      update_column(:encrypted_app_token, nil)
+      self.app_token = nil
+      self.app_refresh_token = nil
+      self.app_token_expires_at = nil
+      update_columns(
+        encrypted_app_token: nil,
+        encrypted_app_token_iv: nil,
+        encrypted_app_refresh_token: nil,
+        encrypted_app_refresh_token_iv: nil,
+        app_token_expires_at: nil,
+        updated_at: Time.current
+      )
     end
   end
 
@@ -189,6 +218,74 @@ class User < ApplicationRecord
     pinned_searches.create(query: 'type:pull_request state:open status:success archived:false', name: 'Mergeable')
     pinned_searches.create(query: "type:pull_request author:#{github_login} inbox:true", name: 'My PRs')
   end
+
+  private
+
+  def validate_github_app_credentials!(credentials)
+    refreshing = credentials['expires'] || credentials['refresh_token'].present? || credentials['expires_at']
+    complete = credentials['token'].present?
+    complete &&= credentials['refresh_token'].present? && credentials['expires_at'].present? if refreshing
+    return if complete
+
+    raise InvalidGithubAppCredentials, 'Incomplete GitHub App credentials'
+  end
+
+  def app_token_for_client
+    refresh_app_token_if_needed
+    return if app_token_expires_at && app_token_expires_at <= Time.current
+
+    app_token
+  end
+
+  def refresh_app_token_if_needed
+    return app_token unless app_token_refresh_due?
+
+    with_lock do
+      reload
+      return app_token unless app_token_refresh_due?
+
+      credentials = GithubAppUserTokenRefresher.new(refresh_token: app_refresh_token).refresh
+      persist_app_credentials(credentials)
+      credentials.access_token
+    end
+  rescue OAuth2::Error, Faraday::Error, GithubAppUserTokenRefresher::InvalidResponse => error
+    log_app_token_refresh_failure(error)
+    app_token unless app_token_expires_at && app_token_expires_at <= Time.current
+  end
+
+  def app_token_refresh_due?
+    app_refresh_token.present? && app_token_expires_at.present? &&
+      app_token_expires_at <= APP_TOKEN_REFRESH_WINDOW.from_now
+  end
+
+  def persist_app_credentials(credentials)
+    self.app_token = credentials.access_token
+    self.app_refresh_token = credentials.refresh_token
+    self.app_token_expires_at = credentials.expires_at
+    timestamp = Time.current
+    update_columns(
+      encrypted_app_token: encrypted_app_token,
+      encrypted_app_token_iv: encrypted_app_token_iv,
+      encrypted_app_refresh_token: encrypted_app_refresh_token,
+      encrypted_app_refresh_token_iv: encrypted_app_refresh_token_iv,
+      app_token_expires_at: app_token_expires_at,
+      updated_at: timestamp
+    )
+    self.updated_at = timestamp
+  end
+
+  def log_app_token_refresh_failure(error)
+    event = {
+      event: 'github_app_user_token_refresh_failed',
+      user_id: id,
+      exception: error.class.name
+    }
+    response = error.respond_to?(:response) ? error.response : nil
+    event[:status] = response.status if response.respond_to?(:status)
+    Rails.logger.warn(event.to_json)
+  end
+
+  public
 
   IMPORTABLE_NOTIFICATION_FIELDS = %w[archived starred unread muted_at last_read_at].freeze
 
