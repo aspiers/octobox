@@ -24,7 +24,7 @@ class NotificationsController < ApplicationController
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
 
-    if @notification.subject && @notification.subject.commentable?
+    if !@notification.ci_workflow_preview? && @notification.subject && @notification.subject.commentable?
       comments_loaded = 5
       @comments = @notification.subject.comments.order('created_at DESC').limit(comments_loaded).reverse
       @comments_left_to_load = @notification.subject.comment_count - comments_loaded
@@ -37,12 +37,14 @@ class NotificationsController < ApplicationController
   end
 
   def expand_comments
+    @notification = current_user.notifications.find(params[:id])
+    return head :unprocessable_entity if @notification.ci_workflow_preview?
+
     scope = notifications_for_presentation.newest
     scope = load_and_count_notifications(scope) unless request.xhr?
 
     ids = scope.pluck(:id)
     position = ids.index(params[:id].to_i)
-    @notification = current_user.notifications.find(params[:id])
     @previous = ids[position-1] unless position.nil? || position-1 < 0
     @next = ids[position+1] unless position.nil? || position+1 > ids.length
 
@@ -62,7 +64,10 @@ class NotificationsController < ApplicationController
   end
 
   def comment
-    subject = current_user.notifications.find(params[:id]).subject
+    notification = current_user.notifications.find(params[:id])
+    return head :unprocessable_entity if notification.ci_workflow_preview?
+
+    subject = notification.subject
 
     if current_user.can_comment?(subject)
       subject.comment(current_user, params[:comment][:body]) if subject.commentable?

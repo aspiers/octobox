@@ -214,8 +214,16 @@ class Notification < ApplicationRecord
     subject_url.scan(/\d+$/).first
   end
 
+  def ci_workflow_preview?
+    subject_type == 'CheckSuite'
+  end
+
   def display_thread?
-    @display_thread ||= Octobox.include_comments? && subjectable? && subject.present? && user.try(:display_comments?)
+    if ci_workflow_preview?
+      Octobox.include_comments? && user.try(:display_comments?) && display?
+    else
+      @display_thread ||= Octobox.include_comments? && subjectable? && subject.present? && user.try(:display_comments?)
+    end
   end
 
   def push_if_changed

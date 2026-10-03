@@ -1,0 +1,29 @@
+<% preview = CiWorkflowPreview.new(notification.subject_title) %>
+<section class="ci-workflow-preview">
+  <h2>Workflow notification</h2>
+  <% unless preview.workflow %>
+    <p><%= preview.title %></p>
+  <% end %>
+  <dl>
+    <% if preview.workflow %>
+      <dt>Workflow</dt>
+      <dd><%= preview.workflow %></dd>
+      <dt>Status</dt>
+      <dd><%= preview.status %></dd>
+      <% if preview.attempt %>
+        <dt>Attempt</dt>
+        <dd><%= preview.attempt %></dd>
+      <% end %>
+      <dt>Branch as reported</dt>
+      <dd><%= preview.branch %></dd>
+    <% end %>
+    <dt>Repository</dt>
+    <dd><%= notification.repository_full_name %></dd>
+    <dt>Notification updated</dt>
+    <dd><time datetime="<%= notification.updated_at.iso8601 %>"><%= notification.updated_at.strftime('%Y-%m-%d %H:%M:%S %Z') %></time></dd>
+  </dl>
+  <p class="text-muted">Reported by this notification. Open Actions for run details.</p>
+  <% if (actions_url = ci_workflow_actions_url(notification)) %>
+    <%= link_to 'Open Actions', actions_url, class: 'btn btn-sm btn-outline-dark', target: '_blank', rel: 'noopener noreferrer' %>
+  <% end %>
+</section>
