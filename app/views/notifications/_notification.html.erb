@@ -1,4 +1,4 @@
-<tr id='notification-<%= notification.id %>' class='notification <%= notification.unread ? 'active' : '' %> <%= notification.display? ? '' : 'notification-disabled' %>'>
+<tr id='notification-<%= notification.id %>' class='notification <%= notification.unread ? 'active' : '' %> <%= notification.display? ? '' : 'notification-disabled' %>' data-github-url='<%= notification.web_url %>'>
   <td class='notification-checkbox align-middle'>
     <div class="custom-control custom-checkbox">
       <%= check_box_tag(

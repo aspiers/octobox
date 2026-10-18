@@ -103,6 +103,7 @@ You can use keyboard shortcuts to navigate and perform certain actions:
  - `m` - Mute current/marked notification(s)
  - `d` - Mark current/marked notification(s) as read here and on GitHub
  - `o` or `Enter` - Open current notification in a new window
+ - `C` - Copy current notification's GitHub link
 
 Press `?` for the help menu.
 

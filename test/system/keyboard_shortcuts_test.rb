@@ -109,6 +109,22 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
     assert_includes star[:class], 'star-active'
   end
 
+  test 'C copies the current notification GitHub link' do
+    page.execute_script(<<~JS)
+      window.copiedText = null;
+      navigator.clipboard.writeText = function(text) {
+        window.copiedText = text;
+        return Promise.resolve();
+      };
+    JS
+    make_current(@notification2)
+
+    send_keys :shift, 'c'
+
+    assert_text 'Copied link to clipboard'
+    assert_equal @notification2.web_url, page.evaluate_script('window.copiedText')
+  end
+
   test 'preview scrolling shortcuts move by full and half pages' do
     open_scrollable_preview
 

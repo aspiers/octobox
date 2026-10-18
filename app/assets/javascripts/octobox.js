@@ -921,6 +921,16 @@ var Octobox = (function() {
     }
   };
 
+  var copyCurrentGitHubLink = function(e) {
+    e.preventDefault();
+    var currentRow = getCurrentRow();
+    if (!currentRow || !currentRow.dataset.githubUrl) return;
+
+    navigator.clipboard.writeText(currentRow.dataset.githubUrl)
+      .then(() => notify("Copied link to clipboard", "success"))
+      .catch(() => notify("Could not copy link", "danger"));
+  };
+
   var scrollThread = function(e, pageFraction) {
     var flexMain = document.querySelector(".flex-main");
     var helpBox = document.getElementById("help-box");
@@ -1021,6 +1031,7 @@ var Octobox = (function() {
   var shiftShortcuts = {
     33: scrollThreadHalfPageUp,   // Shift-PageUp
     34: scrollThreadHalfPageDown, // Shift-PageDown
+    67: copyCurrentGitHubLink,    // C (Shift-c)
     191: openModal,               // ?
   }
 
