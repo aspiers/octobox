@@ -926,8 +926,12 @@ var Octobox = (function() {
     var currentRow = getCurrentRow();
     if (!currentRow || !currentRow.dataset.githubUrl) return;
 
-    navigator.clipboard.writeText(currentRow.dataset.githubUrl)
-      .then(() => notify("Copied link to clipboard", "success"))
+    var url = currentRow.dataset.githubUrl;
+    // notify inserts HTML, so escape the URL as text
+    var escapedUrl = document.createElement("div");
+    escapedUrl.textContent = url;
+    navigator.clipboard.writeText(url)
+      .then(() => notify("Copied " + escapedUrl.innerHTML, "success"))
       .catch(() => notify("Could not copy link", "danger"));
   };
 

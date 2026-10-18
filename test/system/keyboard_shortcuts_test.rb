@@ -121,7 +121,7 @@ class KeyboardShortcutsTest < ApplicationSystemTestCase
 
     send_keys :shift, 'c'
 
-    assert_text 'Copied link to clipboard'
+    assert_text "Copied #{@notification2.web_url}"
     assert_equal @notification2.web_url, page.evaluate_script('window.copiedText')
   end
 
