@@ -20,6 +20,7 @@ window.onload = function() {
 
 document.addEventListener("turbolinks:load", Octobox.initialize);
 document.addEventListener("turbolinks:before-cache", Octobox.removeCurrent);
+document.addEventListener("turbolinks:click", Octobox.rememberSidebarPosition);
 
 document.addEventListener('submit', function(event) {
   if (event.target.matches('#search')) {

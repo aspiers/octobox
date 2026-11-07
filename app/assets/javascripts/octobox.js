@@ -684,6 +684,7 @@ var Octobox = (function() {
     initShiftClickCheckboxes();
 
     showPendingNotice();
+    restoreSidebarPosition();
 
     if (document.getElementById("help-box")){
       enableKeyboardShortcuts();
@@ -957,6 +958,31 @@ var Octobox = (function() {
 
   var pendingNotice = null;
   var pendingListScrollTop = null;
+  var pendingSidebarAnchor = null;
+
+  // A filter link's href toggles once it is active, so match filters by their item's classes instead.
+  var sidebarItemKey = function(link) {
+    if (!link.classList.contains("filter")) return link.getAttribute("href");
+    return Array.from(link.parentElement.classList).filter(function(c) { return c !== "active"; }).join(" ");
+  };
+
+  // Turbolinks replaces the whole body, so the sidebar would otherwise scroll back to the top on every visit.
+  var rememberSidebarPosition = function(event) {
+    var sidebar = document.querySelector(".flex-sidebar");
+    var link = event.target.closest("a");
+    if (!sidebar || !link || !sidebar.contains(link)) return;
+    pendingSidebarAnchor = { key: sidebarItemKey(link), top: link.getBoundingClientRect().top, scrollTop: sidebar.scrollTop };
+  };
+
+  var restoreSidebarPosition = function() {
+    var anchor = pendingSidebarAnchor;
+    var sidebar = document.querySelector(".flex-sidebar");
+    pendingSidebarAnchor = null;
+    if (!anchor || !sidebar) return;
+    var link = Array.from(sidebar.querySelectorAll("a")).find(function(a) { return sidebarItemKey(a) === anchor.key; });
+    if (link) sidebar.scrollTop += link.getBoundingClientRect().top - anchor.top;
+    else sidebar.scrollTop = anchor.scrollTop;
+  };
 
   var showPendingNotice = function() {
     if (!pendingNotice || document.documentElement.hasAttribute("data-turbolinks-preview")) return;
@@ -1119,6 +1145,7 @@ var Octobox = (function() {
     changeArchive: changeArchive,
     initialize: initialize,
     removeCurrent: removeCurrent,
+    rememberSidebarPosition: rememberSidebarPosition,
     toggleOffCanvas: toggleOffCanvas,
     markRead: markRead,
     deleteSelected: deleteSelected,

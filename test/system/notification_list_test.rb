@@ -88,4 +88,29 @@ class NotificationListTest < ApplicationSystemTestCase
     end
     assert_text 'Starred item'
   end
+
+  test 'clicking a sidebar filter keeps the clicked item where it was on screen' do
+    30.times do |i|
+      create(:notification, user: @user, repository_full_name: format('acme/repo-%02d', i), repository_owner_name: 'acme')
+    end
+    page.current_window.resize_to(1400, 500)
+    visit '/'
+    link = "document.querySelector(\"li[title='acme/repo-15'] a\")"
+    page.execute_script(<<~JS)
+      window.sidebarProbe = true;
+      var sidebar = document.querySelector('.flex-sidebar');
+      sidebar.scrollTop += #{link}.getBoundingClientRect().top - sidebar.getBoundingClientRect().top - 200;
+    JS
+    top_before = page.evaluate_script("#{link}.getBoundingClientRect().top")
+    sidebar_top = page.evaluate_script("document.querySelector('.flex-sidebar').getBoundingClientRect().top")
+    assert_in_delta 200, top_before - sidebar_top, 1, 'sidebar must scroll far enough to place the link'
+
+    find("li[title='acme/repo-15'] a").click
+
+    assert_selector "li.active[title='acme/repo-15']"
+    assert page.evaluate_script('window.sidebarProbe'), 'expected a Turbolinks visit, not a full page load'
+    assert_in_delta top_before, page.evaluate_script("#{link}.getBoundingClientRect().top"), 1
+  ensure
+    page.current_window.resize_to(1400, 900)
+  end
 end
