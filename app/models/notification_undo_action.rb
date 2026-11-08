@@ -4,6 +4,13 @@ class NotificationUndoAction < ApplicationRecord
   EXPIRES_IN = 5.minutes
   ARCHIVE_BUFFER = 10.seconds
   ARCHIVE_DELAY = EXPIRES_IN + ARCHIVE_BUFFER
+  # Their GitHub sync waits for the undo window, so the record must outlive it
+  SYNCED_ACTIONS = %w[archive mute].freeze
+  RESTORED_FIELDS = {
+    'archive' => %w[archived],
+    'unarchive' => %w[archived],
+    'mute' => %w[archived unread muted_at]
+  }.freeze
 
   has_secure_token :token
 
@@ -16,25 +23,31 @@ class NotificationUndoAction < ApplicationRecord
   scope :expired, -> { where('expires_at <= ?', Time.current) }
 
   def self.record_archive!(user, notifications, archived: true)
-    states = notifications.pluck(:id, :archived, :updated_at).map do |id, previously_archived, updated_at|
-      {
-        'id' => id,
-        'archived' => previously_archived,
-        'updated_at' => serialize_timestamp(updated_at)
-      }
-    end
+    record!(user, notifications, archived ? 'archive' : 'unarchive')
+  end
+
+  def self.record!(user, notifications, action)
+    states = notifications.map { |notification| state_for(notification, action) }
 
     return if states.empty?
 
-    # Archive actions stay until ArchiveWorker syncs them to GitHub, so a
+    # Synced actions stay until their worker syncs them to GitHub, so a
     # missing record always means the user undid the action
-    user.notification_undo_actions.expired.where.not(action: 'archive').delete_all
+    user.notification_undo_actions.expired.where.not(action: SYNCED_ACTIONS).delete_all
 
     user.notification_undo_actions.create!(
-      action: archived ? 'archive' : 'unarchive',
+      action: action,
       notification_states: states,
       expires_at: EXPIRES_IN.from_now
     )
+  end
+
+  # Delete keeps every column so undo can recreate the row
+  def self.state_for(notification, action)
+    return notification.attributes.as_json if action == 'delete'
+
+    notification.attributes.slice('id', *RESTORED_FIELDS.fetch(action)).as_json
+      .merge('updated_at' => serialize_timestamp(notification.updated_at))
   end
 
   def self.serialize_timestamp(time)
@@ -74,13 +87,26 @@ class NotificationUndoAction < ApplicationRecord
     return false if expired?
 
     transaction do
-      notification_states.group_by { |state| state['archived'] }.each do |archived, states|
-        user.notifications.where(id: states.map { |state| state['id'] }).update_all(archived: archived)
-      end
-
+      action == 'delete' ? restore_deleted : restore_fields
       destroy!
     end
 
     true
+  end
+
+  private
+
+  def restore_fields
+    notification_states.group_by { |state| state.except('id', 'updated_at') }.each do |fields, states|
+      user.notifications.where(id: states.map { |state| state['id'] }).update_all(fields)
+    end
+  end
+
+  # A notification that sync brought back since the delete is newer, so keep it
+  def restore_deleted
+    states = notification_states
+    resynced = user.notifications.where(github_id: states.map { |state| state['github_id'] }).pluck(:github_id)
+    missing = states.reject { |state| resynced.include?(state['github_id']) }
+    Notification.insert_all!(missing) if missing.any?
   end
 end

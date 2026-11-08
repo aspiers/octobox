@@ -30,6 +30,49 @@ var Octobox = (function() {
     return response.json();
   };
 
+  var lastUndoUrl = null;
+
+  // Removes rows server-side, then reloads the list with any undo offer
+  var postRowsAction = function(url, formData, ids, errorMessage) {
+    postRequest(url + location.search, formData)
+    .then(response => {
+      if (!response.ok) throw new Error('Request failed');
+      return responseJson(response).catch(() => ({}));
+    })
+    .then(data => {
+      lastUndoUrl = data.undo_url || null;
+      if (data.undo_url) {
+        // The list reloads below, so show the notice once the new page renders
+        pendingNotice = {
+          message: data.message + " <a href='" + data.undo_url + "' data-method='post'>Undo</a>",
+          type: "success"
+        };
+      }
+      resetCursorAfterRowsRemoved(ids);
+      updateFavicon();
+    })
+    .catch(() => {
+      notify(errorMessage, "danger");
+    });
+  };
+
+  var undoLastAction = function(e) {
+    if (!lastUndoUrl) return;
+    e.preventDefault();
+    var url = lastUndoUrl;
+    lastUndoUrl = null;
+
+    postRequest(url, new FormData())
+    .then(response => {
+      if (!response.ok) throw new Error('Request failed');
+      pendingNotice = { message: "Notification action undone", type: "success" };
+      Turbolinks.visit("/" + location.search);
+    })
+    .catch(() => {
+      notify("Could not undo: the undo window may have expired", "danger");
+    });
+  };
+
   var maybeConfirm = function(message){
     if(document.body.classList.contains('disable_confirmations')) {
       return true;
@@ -190,6 +233,10 @@ var Octobox = (function() {
       var typing = e.target.matches("input, textarea, select") || e.target.isContentEditable;
       var button = e.target.closest("button, [role='button']");
       var buttonActivation = button && [13, 32].includes(e.which);
+      if (helpBox && !typing && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+        undoLastAction(e);
+        return;
+      }
       if (helpBox && !typing && !buttonActivation && !e.metaKey) {
         var shortcutMap = (!e.ctrlKey && !e.altKey)
           ? (e.shiftKey ? shiftShortcuts : shortcuts)
@@ -241,18 +288,7 @@ var Octobox = (function() {
         formData.append('id[]', ids);
       }
 
-      postRequest("/notifications/mute_selected" + location.search, formData)
-      .then(response => {
-        if (response.ok) {
-          resetCursorAfterRowsRemoved(ids);
-          updateFavicon();
-        } else {
-          throw new Error('Request failed');
-        }
-      })
-      .catch(() => {
-        notify("Could not mute notification(s)", "danger");
-      });
+      postRowsAction("/notifications/mute_selected", formData, ids, "Could not mute notification(s)");
     }
   };
 
@@ -324,28 +360,7 @@ var Octobox = (function() {
     }
     formData.append('value', value);
 
-    postRequest("/notifications/archive_selected" + location.search, formData)
-    .then(response => {
-      if (response.ok) {
-        return responseJson(response).catch(() => ({}));
-      } else {
-        throw new Error('Request failed');
-      }
-    })
-    .then(data => {
-      if (data.undo_url) {
-        // The list reloads below, so show the notice once the new page renders
-        pendingNotice = {
-          message: data.message + " <a href='" + data.undo_url + "' data-method='post'>Undo</a>",
-          type: "success"
-        };
-      }
-      resetCursorAfterRowsRemoved(ids);
-      updateFavicon();
-    })
-    .catch(() => {
-      notify("Could not archive notification(s)", "danger");
-    });
+    postRowsAction("/notifications/archive_selected", formData, ids, "Could not archive notification(s)");
   }
 
   var toggleSelectAll = function() {
@@ -728,18 +743,7 @@ var Octobox = (function() {
         formData.append('id[]', ids);
       }
 
-      postRequest("/notifications/delete_selected" + location.search, formData)
-      .then(response => {
-        if (response.ok) {
-          resetCursorAfterRowsRemoved(ids);
-          updateFavicon();
-        } else {
-          throw new Error('Request failed');
-        }
-      })
-      .catch(() => {
-        notify("Could not delete notification", "danger");
-      });
+      postRowsAction("/notifications/delete_selected", formData, ids, "Could not delete notification");
     }
   }
 

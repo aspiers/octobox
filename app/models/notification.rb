@@ -127,10 +127,15 @@ class Notification < ApplicationRecord
     end
   end
 
-  def self.mute(notifications)
+  def self.mute(notifications, undo_action: nil)
     return if notifications.empty?
     user = notifications.to_a.first.user
-    MuteNotificationsWorker.perform_async_if_configured(user.id, notifications.map(&:github_id))
+    github_ids = notifications.map(&:github_id)
+    if undo_action
+      MuteNotificationsWorker.perform_in(NotificationUndoAction::ARCHIVE_DELAY, user.id, github_ids, undo_action.id)
+    else
+      MuteNotificationsWorker.perform_async_if_configured(user.id, github_ids)
+    end
     where(id: notifications.map(&:id)).update_all(archived: true, unread: false, muted_at: Time.current)
   end
 

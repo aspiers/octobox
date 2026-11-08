@@ -254,6 +254,49 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'Undo link has expired', flash[:error]
   end
 
+  test 'undo mute restores notifications and skips the GitHub mute' do
+    stub_background_jobs_enabled
+    sign_in_as(@user)
+    notification = create(:notification, user: @user, archived: false, unread: true)
+
+    post '/notifications/mute_selected', params: { id: [notification.id] }, xhr: true
+    undo_url = JSON.parse(response.body).fetch('undo_url')
+    assert notification.reload.muted_at
+    assert_in_delta NotificationUndoAction::ARCHIVE_DELAY.from_now.to_f, MuteNotificationsWorker.jobs.first['at'], 2
+
+    post undo_url, xhr: true
+
+    assert_response :ok
+    assert_nil notification.reload.muted_at
+    Notification.expects(:mute_on_github).never
+    MuteNotificationsWorker.drain
+  end
+
+  test 'undo delete recreates deleted notifications' do
+    sign_in_as(@user)
+    notification = create(:notification, user: @user, subject_title: 'Deleted one')
+
+    post '/notifications/delete_selected', params: { id: [notification.id] }, xhr: true
+    undo_url = JSON.parse(response.body).fetch('undo_url')
+    refute Notification.exists?(notification.id)
+
+    post undo_url
+
+    assert_redirected_to root_path
+    assert_equal 'Deleted one', Notification.find(notification.id).subject_title
+  end
+
+  test 'undo by xhr reports an expired action as not found' do
+    sign_in_as(@user)
+    notification = create(:notification, user: @user)
+    undo_action = NotificationUndoAction.record!(@user, @user.notifications.where(id: notification.id), 'delete')
+    undo_action.update!(expires_at: 1.minute.ago)
+
+    post undo_archive_notifications_path(token: undo_action.token), xhr: true
+
+    assert_response :not_found
+  end
+
   test 'archives all notifications' do
     sign_in_as(@user)
     notification1 = create(:notification, user: @user, archived: false)

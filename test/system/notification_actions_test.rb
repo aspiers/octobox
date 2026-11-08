@@ -98,6 +98,43 @@ class NotificationActionsTest < ApplicationSystemTestCase
     refute @notification1.reload.archived
   end
 
+  test 'ctrl-z undoes a mute' do
+    stub_background_jobs_enabled
+    toggle_notification_checkbox(@notification1.id)
+    sleep 0.1
+
+    click_button class: 'mute_selected'
+
+    assert_no_text 'Action test one', wait: 5
+    assert @notification1.reload.muted_at
+
+    find('body').send_keys([:control, 'z'])
+
+    assert_text 'Notification action undone', wait: 5
+    assert_text 'Action test one'
+    assert_nil @notification1.reload.muted_at
+  end
+
+  test 'undo link restores deleted notifications' do
+    # The delete button only shows outside the inbox
+    @notification1.update!(archived: true)
+    visit '/?archive=true'
+    toggle_notification_checkbox(@notification1.id)
+    sleep 0.1
+
+    click_button class: 'delete_selected'
+
+    assert_no_text 'Action test one', wait: 5
+    refute Notification.exists?(@notification1.id)
+
+    within '.header-flash-messages' do
+      click_link 'Undo'
+    end
+
+    assert_text 'Notification action undone', wait: 5
+    assert_text 'Action test one'
+  end
+
   test 'unchecking all checkboxes hides bulk action buttons' do
     toggle_notification_checkbox(@notification1.id)
     sleep 0.1

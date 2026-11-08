@@ -101,32 +101,26 @@ class NotificationsController < ApplicationController
   end
 
   def mute_selected
-    Notification.mute(selected_notifications)
-    if request.xhr?
-      head :ok
-    else
-      redirect_back fallback_location: root_path
-    end
+    notifications = selected_notifications
+    undo_action = record_undo_action(notifications, 'mute')
+    Notification.mute(notifications, undo_action: undo_action)
+    respond_with_undo(undo_action)
   end
 
   def archive_selected
     notifications = selected_notifications
-    undo_action = record_archive_undo_action(notifications)
+    undo_action = record_undo_action(notifications, archive_value ? 'archive' : 'unarchive')
 
     Notification.archive(notifications, params[:value], undo_action: undo_action)
-
-    if request.xhr?
-      render json: undo_archive_payload(undo_action)
-    else
-      flash[:success] = undo_archive_message(undo_action)
-      redirect_back fallback_location: root_path
-    end
+    respond_with_undo(undo_action)
   end
 
   def undo_archive
     undo_action = current_user.notification_undo_actions.find_by(token: params[:token])
+    undone = undo_action&.restore!
+    return head(undone ? :ok : :not_found) if request.xhr?
 
-    if undo_action&.restore!
+    if undone
       flash[:success] = 'Notification action undone'
     else
       flash[:error] = 'Undo link has expired'
@@ -141,12 +135,10 @@ class NotificationsController < ApplicationController
   end
 
   def delete_selected
-    selected_notifications.delete_all
-    if request.xhr?
-      head :ok
-    else
-      redirect_back fallback_location: root_path
-    end
+    notifications = selected_notifications
+    undo_action = record_undo_action(notifications, 'delete')
+    notifications.delete_all
+    respond_with_undo(undo_action)
   end
 
   def star
@@ -183,7 +175,16 @@ class NotificationsController < ApplicationController
 
   private
 
-  def undo_archive_payload(undo_action)
+  def respond_with_undo(undo_action)
+    if request.xhr?
+      render json: undo_payload(undo_action)
+    else
+      flash[:success] = undo_message(undo_action)
+      redirect_back fallback_location: root_path
+    end
+  end
+
+  def undo_payload(undo_action)
     return {} unless undo_action
 
     {
@@ -192,17 +193,21 @@ class NotificationsController < ApplicationController
     }
   end
 
-  def undo_archive_message(undo_action)
+  def undo_message(undo_action)
     return 'Notification action complete.' unless undo_action
 
     undo_path = undo_archive_notifications_path(token: undo_action.token)
     "Notification action complete. <a href=\"#{undo_path}\" data-method=\"post\">Undo</a>"
   end
 
-  def record_archive_undo_action(notifications)
-    archive_value = params[:value] ? ActiveRecord::Type::Boolean.new.cast(params[:value]) : true
-    return if archive_value && !Octobox.background_jobs_enabled?
+  def archive_value
+    params[:value] ? ActiveRecord::Type::Boolean.new.cast(params[:value]) : true
+  end
 
-    NotificationUndoAction.record_archive!(current_user, notifications, archived: archive_value)
+  # Without background jobs the GitHub sync runs at once, so it can't wait for undo
+  def record_undo_action(notifications, action)
+    return if NotificationUndoAction::SYNCED_ACTIONS.include?(action) && !Octobox.background_jobs_enabled?
+
+    NotificationUndoAction.record!(current_user, notifications, action)
   end
 end

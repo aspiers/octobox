@@ -75,4 +75,64 @@ class NotificationUndoActionTest < ActiveSupport::TestCase
     assert notification.reload.archived?
     assert NotificationUndoAction.exists?(undo_action.id)
   end
+
+  test 'record keeps expired mute actions until their GitHub mute runs' do
+    user = create(:user)
+    notification = create(:notification, user: user)
+    expired_action = NotificationUndoAction.record!(user, user.notifications, 'mute')
+    expired_delete = NotificationUndoAction.record!(user, user.notifications, 'delete')
+    expired_action.update!(expires_at: 1.minute.ago)
+    expired_delete.update!(expires_at: 1.minute.ago)
+
+    NotificationUndoAction.record!(user, user.notifications.where(id: notification.id), 'archive')
+
+    assert NotificationUndoAction.exists?(expired_action.id)
+    refute NotificationUndoAction.exists?(expired_delete.id)
+  end
+
+  test 'restore reverts a mute' do
+    user = create(:user)
+    notification = create(:notification, user: user, archived: false, unread: true)
+    notifications = user.notifications.where(id: notification.id)
+    undo_action = NotificationUndoAction.record!(user, notifications, 'mute')
+    Notification.mute(notifications, undo_action: undo_action)
+    assert notification.reload.muted_at
+
+    assert undo_action.restore!
+
+    notification.reload
+    assert_nil notification.muted_at
+    refute notification.archived?
+    assert notification.unread?
+  end
+
+  test 'restore recreates deleted notifications' do
+    user = create(:user)
+    notification = create(:notification, user: user, starred: true, subject_title: 'Deleted one')
+    notifications = user.notifications.where(id: notification.id)
+    undo_action = NotificationUndoAction.record!(user, notifications, 'delete')
+    notifications.delete_all
+
+    assert undo_action.restore!
+
+    restored = user.notifications.find(notification.id)
+    assert_equal notification.github_id, restored.github_id
+    assert_equal 'Deleted one', restored.subject_title
+    assert restored.starred?
+    assert_in_delta notification.updated_at, restored.updated_at, 0.001
+  end
+
+  test 'restore keeps a deleted notification that sync brought back' do
+    user = create(:user)
+    notification = create(:notification, user: user, subject_title: 'Old title')
+    notifications = user.notifications.where(id: notification.id)
+    undo_action = NotificationUndoAction.record!(user, notifications, 'delete')
+    notifications.delete_all
+    resynced = create(:notification, user: user, github_id: notification.github_id, subject_title: 'New title')
+
+    assert undo_action.restore!
+
+    assert_equal [resynced.id], user.notifications.where(github_id: notification.github_id).pluck(:id)
+    assert_equal 'New title', resynced.reload.subject_title
+  end
 end
