@@ -33,7 +33,7 @@ var Octobox = (function() {
   var lastUndoUrl = null;
 
   // Removes rows server-side, then reloads the list with any undo offer
-  var postRowsAction = function(url, formData, ids, errorMessage) {
+  var postRowsAction = function(url, formData, ids, errorMessage, onRemoved) {
     postRequest(url + location.search, formData)
     .then(response => {
       if (!response.ok) throw new Error('Request failed');
@@ -48,7 +48,7 @@ var Octobox = (function() {
           type: "success"
         };
       }
-      resetCursorAfterRowsRemoved(ids);
+      onRemoved ? onRemoved() : resetCursorAfterRowsRemoved(ids);
       updateFavicon();
     })
     .catch(() => {
